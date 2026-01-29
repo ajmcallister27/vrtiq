@@ -1,0 +1,101 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Resort {
+  id            String   @id @default(uuid())
+  name          String
+  location      String
+  country       String?
+  latitude      Float?
+  longitude     Float?
+  website       String?
+  verticalDrop  Int?     @map("vertical_drop")
+  baseElevation Int?     @map("base_elevation")
+  peakElevation Int?     @map("peak_elevation")
+  mapImageUrl   String?  @map("map_image_url")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  createdBy     String?  @map("created_by")
+
+  runs Run[]
+
+  @@map("resorts")
+}
+
+model Run {
+  id                 String   @id @default(uuid())
+  name               String
+  resortId           String   @map("resort_id")
+  officialDifficulty String   @map("official_difficulty")
+  lift               String?
+  lengthFt           Int?     @map("length_ft")
+  verticalDrop       Int?     @map("vertical_drop")
+  averagePitch       Float?   @map("average_pitch")
+  maxPitch           Float?   @map("max_pitch")
+  groomed            Boolean  @default(false)
+  description        String?
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+  createdBy          String?  @map("created_by")
+
+  resort      Resort             @relation(fields: [resortId], references: [id], onDelete: Cascade)
+  ratings     DifficultyRating[]
+  notes       ConditionNote[]
+  comparisons1 CrossResortComparison[] @relation("Run1")
+  comparisons2 CrossResortComparison[] @relation("Run2")
+
+  @@map("runs")
+}
+
+model DifficultyRating {
+  id         String   @id @default(uuid())
+  runId      String   @map("run_id")
+  rating     Int
+  skillLevel String?  @map("skill_level")
+  conditions String?
+  comment    String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  createdBy  String?  @map("created_by")
+
+  run Run @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@map("difficulty_ratings")
+}
+
+model ConditionNote {
+  id           String   @id @default(uuid())
+  runId        String   @map("run_id")
+  note         String
+  tags         String[]
+  dateObserved DateTime? @map("date_observed")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  createdBy    String?  @map("created_by")
+
+  run Run @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@map("condition_notes")
+}
+
+model CrossResortComparison {
+  id             String   @id @default(uuid())
+  run1Id         String   @map("run1_id")
+  run2Id         String   @map("run2_id")
+  comparisonType String   @map("comparison_type")
+  note           String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  createdBy      String?  @map("created_by")
+
+  run1 Run @relation("Run1", fields: [run1Id], references: [id], onDelete: Cascade)
+  run2 Run @relation("Run2", fields: [run2Id], references: [id], onDelete: Cascade)
+
+  @@map("cross_resort_comparisons")
+}
