@@ -41,7 +41,7 @@ export default function Layout({ children, currentPageName }) {
             <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center">
               <Mountain className="w-5 h-5 text-white" />
             </div>
-            <span className="font-semibold text-slate-900 tracking-tight text-lg">Whiteout</span>
+            <span className="font-semibold text-slate-900 tracking-tight text-lg">vrtIQ</span>
           </Link>
           <span className="text-[10px] uppercase tracking-widest text-slate-400 font-medium">
             Real Difficulty

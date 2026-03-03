@@ -25,8 +25,8 @@ export default function SuggestEdit() {
     setStatus('sending');
     await base44.integrations.Core.SendEmail({
       to: 'ajmcallister27@gmail.com',
-      subject: `Whiteout: Suggested Edit for ${type === 'resort' ? 'Resort' : 'Run'} — ${name}`,
-      body: `A user has suggested an edit on Whiteout.\n\n` +
+      subject: `vrtIQ: Suggested Edit for ${type === 'resort' ? 'Resort' : 'Run'} — ${name}`,
+      body: `A user has suggested an edit on vrtIQ.\n\n` +
         `Type: ${type === 'resort' ? 'Resort' : 'Run'}\n` +
         `Name: ${name}\n\n` +
         `From: ${yourName || 'Anonymous'}${yourEmail ? ` <${yourEmail}>` : ''}\n\n` +
