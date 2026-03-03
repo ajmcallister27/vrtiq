@@ -1,149 +1,39 @@
-# Whiteout - Ski Run Difficulty Ratings
+**Welcome to your Base44 project** 
 
-A complete, self-hosted application for crowdsourced ski run difficulty ratings.
+**About**
 
-## Project Structure
+View and Edit  your app on [Base44.com](http://Base44.com) 
+
+This project contains everything you need to run your app locally.
+
+**Edit the code in your local development environment**
+
+Any change pushed to the repo will also be reflected in the Base44 Builder.
+
+**Prerequisites:** 
+
+1. Clone the repository using the project's Git URL 
+2. Navigate to the project directory
+3. Install dependencies: `npm install`
+4. Create an `.env.local` file and set the right environment variables
 
 ```
-whiteout/
-├── frontend/          # React + Vite + Tailwind
-│   ├── src/
-│   ├── public/
-│   └── package.json
-├── backend/           # Node.js + Express + Prisma
-│   ├── src/
-│   ├── prisma/
-│   └── package.json
-├── .env.example
-└── README.md
+VITE_BASE44_APP_ID=your_app_id
+VITE_BASE44_APP_BASE_URL=your_backend_url
+
+e.g.
+VITE_BASE44_APP_ID=cbef744a8545c389ef439ea6
+VITE_BASE44_APP_BASE_URL=https://my-to-do-list-81bfaad7.base44.app
 ```
 
-## Prerequisites
+Run the app: `npm run dev`
 
-- Node.js 18+
-- PostgreSQL 14+
-- npm or yarn
+**Publish your changes**
 
-## Quick Start
+Open [Base44.com](http://Base44.com) and click on Publish.
 
-### 1. Set Up PostgreSQL
+**Docs & Support**
 
-```bash
-# macOS (Homebrew)
-brew install postgresql@15
-brew services start postgresql@15
+Documentation: [https://docs.base44.com/Integrations/Using-GitHub](https://docs.base44.com/Integrations/Using-GitHub)
 
-# Ubuntu/Debian
-sudo apt update
-sudo apt install postgresql postgresql-contrib
-sudo systemctl start postgresql
-
-# Create database
-psql -U postgres
-CREATE DATABASE whiteout;
-\q
-```
-
-### 2. Configure Environment
-
-```bash
-# Copy environment file
-cp .env.example .env
-
-# Edit with your database credentials
-# DATABASE_URL=postgresql://postgres:yourpassword@localhost:5432/whiteout
-```
-
-### 3. Install & Run Backend
-
-```bash
-cd backend
-npm install
-npx prisma migrate deploy   # Run migrations
-npx prisma db seed          # Seed with initial data
-npm run dev                 # Start development server
-```
-
-Backend will be running at http://localhost:3001
-
-### 4. Install & Run Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Frontend will be running at http://localhost:5173
-
-## Production Deployment
-
-### Backend
-
-```bash
-cd backend
-npm install
-npx prisma migrate deploy
-npm run build
-npm start
-```
-
-### Frontend
-
-```bash
-cd frontend
-npm install
-npm run build
-# Serve the dist/ folder with nginx, Apache, or any static host
-```
-
-### Using PM2 (Recommended for Backend)
-
-```bash
-npm install -g pm2
-cd backend
-pm2 start npm --name "whiteout-api" -- start
-pm2 save
-pm2 startup
-```
-
-### Docker (Alternative)
-
-Both frontend and backend include Dockerfiles for containerized deployment.
-
-## API Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | /api/resorts | List all resorts |
-| GET | /api/resorts/:id | Get resort by ID |
-| POST | /api/resorts | Create resort |
-| PUT | /api/resorts/:id | Update resort |
-| DELETE | /api/resorts/:id | Delete resort |
-| GET | /api/runs | List all runs |
-| GET | /api/runs?resort_id=xxx | Filter runs by resort |
-| POST | /api/runs | Create run |
-| POST | /api/runs/bulk | Bulk create runs |
-| PUT | /api/runs/:id | Update run |
-| DELETE | /api/runs/:id | Delete run |
-| GET | /api/ratings | List all ratings |
-| GET | /api/ratings?run_id=xxx | Filter ratings by run |
-| POST | /api/ratings | Create rating |
-| GET | /api/notes | List condition notes |
-| POST | /api/notes | Create note |
-| GET | /api/comparisons | List comparisons |
-| POST | /api/comparisons | Create comparison |
-| GET | /health | Health check |
-
-## Environment Variables
-
-| Variable | Description | Required |
-|----------|-------------|----------|
-| DATABASE_URL | PostgreSQL connection string | Yes |
-| PORT | Backend server port | No (default: 3001) |
-| NODE_ENV | Environment (development/production) | No |
-| VITE_API_URL | API URL for frontend | No (default: /api) |
-
-## License
-
-MIT License - Use freely for any purpose.
+Support: [https://app.base44.com/support](https://app.base44.com/support)

@@ -1,0 +1,30 @@
+{
+  "name": "ConditionNote",
+  "type": "object",
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "description": "Reference to Run"
+    },
+    "note": {
+      "type": "string",
+      "description": "Condition note text"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Tags like steep, icy, moguls, narrow, trees"
+    },
+    "date_observed": {
+      "type": "string",
+      "format": "date",
+      "description": "Date conditions were observed"
+    }
+  },
+  "required": [
+    "run_id",
+    "note"
+  ]
+}

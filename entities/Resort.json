@@ -1,0 +1,50 @@
+{
+  "name": "Resort",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Resort name"
+    },
+    "location": {
+      "type": "string",
+      "description": "City, State or region"
+    },
+    "country": {
+      "type": "string",
+      "description": "Country"
+    },
+    "latitude": {
+      "type": "number",
+      "description": "Latitude coordinate"
+    },
+    "longitude": {
+      "type": "number",
+      "description": "Longitude coordinate"
+    },
+    "map_image_url": {
+      "type": "string",
+      "description": "URL to trail map image"
+    },
+    "website": {
+      "type": "string",
+      "description": "Resort website URL"
+    },
+    "vertical_drop": {
+      "type": "number",
+      "description": "Vertical drop in feet"
+    },
+    "base_elevation": {
+      "type": "number",
+      "description": "Base elevation in feet"
+    },
+    "peak_elevation": {
+      "type": "number",
+      "description": "Peak elevation in feet"
+    }
+  },
+  "required": [
+    "name",
+    "location"
+  ]
+}

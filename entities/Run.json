@@ -1,0 +1,58 @@
+{
+  "name": "Run",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Run name"
+    },
+    "resort_id": {
+      "type": "string",
+      "description": "Reference to Resort"
+    },
+    "official_difficulty": {
+      "type": "string",
+      "enum": [
+        "green",
+        "blue",
+        "black",
+        "double_black",
+        "terrain_park"
+      ],
+      "description": "Official trail rating"
+    },
+    "lift": {
+      "type": "string",
+      "description": "Lift(s) that service this run"
+    },
+    "length_ft": {
+      "type": "number",
+      "description": "Run length in feet"
+    },
+    "vertical_drop": {
+      "type": "number",
+      "description": "Vertical drop of run in feet"
+    },
+    "average_pitch": {
+      "type": "number",
+      "description": "Average pitch in degrees"
+    },
+    "max_pitch": {
+      "type": "number",
+      "description": "Maximum pitch in degrees"
+    },
+    "groomed": {
+      "type": "boolean",
+      "description": "Whether run is typically groomed"
+    },
+    "description": {
+      "type": "string",
+      "description": "Brief description of the run"
+    }
+  },
+  "required": [
+    "name",
+    "resort_id",
+    "official_difficulty"
+  ]
+}

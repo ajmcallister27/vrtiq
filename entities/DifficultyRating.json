@@ -1,0 +1,46 @@
+{
+  "name": "DifficultyRating",
+  "type": "object",
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "description": "Reference to Run"
+    },
+    "rating": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 10,
+      "description": "Difficulty rating 1-10"
+    },
+    "skill_level": {
+      "type": "string",
+      "enum": [
+        "beginner",
+        "intermediate",
+        "advanced",
+        "expert"
+      ],
+      "description": "Self-reported skill level of rater"
+    },
+    "conditions": {
+      "type": "string",
+      "enum": [
+        "powder",
+        "groomed",
+        "packed",
+        "icy",
+        "spring",
+        "variable"
+      ],
+      "description": "Conditions when rated"
+    },
+    "comment": {
+      "type": "string",
+      "description": "Optional comment about the rating"
+    }
+  },
+  "required": [
+    "run_id",
+    "rating"
+  ]
+}

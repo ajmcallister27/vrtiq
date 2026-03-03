@@ -1,0 +1,32 @@
+{
+  "name": "CrossResortComparison",
+  "type": "object",
+  "properties": {
+    "run1_id": {
+      "type": "string",
+      "description": "Reference to first Run"
+    },
+    "run2_id": {
+      "type": "string",
+      "description": "Reference to second Run"
+    },
+    "comparison_type": {
+      "type": "string",
+      "enum": [
+        "easier",
+        "similar",
+        "harder"
+      ],
+      "description": "How run1 compares to run2"
+    },
+    "note": {
+      "type": "string",
+      "description": "Explanation of comparison"
+    }
+  },
+  "required": [
+    "run1_id",
+    "run2_id",
+    "comparison_type"
+  ]
+}
