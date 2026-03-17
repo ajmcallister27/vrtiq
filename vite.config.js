@@ -7,13 +7,13 @@ import { VitePWA } from 'vite-plugin-pwa'
 // set REPO_NAME in other environments if necessary
 const repoName = process.env.GITHUB_REPOSITORY
   ? process.env.GITHUB_REPOSITORY.split('/')[1]
-  : process.env.REPO_NAME || '<REPO_NAME>'
+  : process.env.REPO_NAME || 'vrtiq'
 
 const basePath = process.env.NODE_ENV === 'production' ? `/${repoName}/` : '/'
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/',
+  base: basePath,
   logLevel: 'error', // Suppress warnings, only show errors
   build: {
     minify: 'esbuild', // fast minification
