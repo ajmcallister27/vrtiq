@@ -13,7 +13,7 @@ const basePath = process.env.NODE_ENV === 'production' ? `/${repoName}/` : '/'
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/vrtiq/',
+  base: '/',
   logLevel: 'error', // Suppress warnings, only show errors
   build: {
     minify: 'esbuild', // fast minification
