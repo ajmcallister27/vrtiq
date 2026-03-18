@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { createPageUrl } from '../utils';
 import { base44 } from '@/api/base44Client';
 import { useQuery } from '@tanstack/react-query';
@@ -22,8 +22,9 @@ import EmptyState from '../components/EmptyState';
 const difficultyOrder = { green: 1, blue: 2, black: 3, double_black: 4, terrain_park: 5 };
 
 export default function Resort() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const resortId = urlParams.get('id');
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const resortId = searchParams.get('id');
   
   const [sortBy, setSortBy] = useState('official'); // official, crowd, name
   const [filterDifficulty, setFilterDifficulty] = useState('all');
@@ -131,7 +132,7 @@ export default function Resort() {
               </a>
             )}
             <Link
-              to={createPageUrl(`SuggestEdit?type=resort&name=${encodeURIComponent(resort.name)}&back=${encodeURIComponent(window.location.pathname + window.location.search)}`)}
+              to={createPageUrl(`SuggestEdit?type=resort&name=${encodeURIComponent(resort.name)}&back=${encodeURIComponent(location.pathname + location.search)}`)}
               className="p-2 text-slate-400 hover:text-slate-600 inline-flex items-center gap-1 text-xs"
             >
               <Pencil className="w-4 h-4" />

@@ -6,18 +6,33 @@ const toSnakeCase = (str) => {
 	return str.replace(/([A-Z])/g, '_$1').toLowerCase();
 }
 
+const getSearchString = () => {
+	if (isNode) return '';
+	if (window.location.search) return window.location.search;
+	const hash = window.location.hash || '';
+	const queryIndex = hash.indexOf('?');
+	return queryIndex >= 0 ? hash.slice(queryIndex) : '';
+};
+
 const getAppParamValue = (paramName, { defaultValue = undefined, removeFromUrl = false } = {}) => {
 	if (isNode) {
 		return defaultValue;
 	}
 	const storageKey = `base44_${toSnakeCase(paramName)}`;
-	const urlParams = new URLSearchParams(window.location.search);
+	const urlParams = new URLSearchParams(getSearchString());
 	const searchParam = urlParams.get(paramName);
 	if (removeFromUrl) {
 		urlParams.delete(paramName);
-		const newUrl = `${window.location.pathname}${urlParams.toString() ? `?${urlParams.toString()}` : ""
-			}${window.location.hash}`;
-		window.history.replaceState({}, document.title, newUrl);
+		const newSearch = urlParams.toString();
+		if (window.location.search) {
+			const newUrl = `${window.location.pathname}${newSearch ? `?${newSearch}` : ''}${window.location.hash}`;
+			window.history.replaceState({}, document.title, newUrl);
+		} else {
+			const hash = window.location.hash || '';
+			const baseHash = hash.split('?')[0];
+			const newHash = `${baseHash}${newSearch ? `?${newSearch}` : ''}`;
+			window.history.replaceState({}, document.title, newHash);
+		}
 	}
 	if (searchParam) {
 		storage.setItem(storageKey, searchParam);

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { createPageUrl } from '../utils';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -25,8 +25,9 @@ import EmptyState from '../components/EmptyState';
 import { format } from 'date-fns';
 
 export default function RunDetail() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const runId = urlParams.get('id');
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const runId = searchParams.get('id');
   const queryClient = useQueryClient();
   
   const [showRatingForm, setShowRatingForm] = useState(false);
@@ -195,7 +196,7 @@ export default function RunDetail() {
             {resort?.name || 'Back'}
           </Link>
           <Link
-            to={createPageUrl(`SuggestEdit?type=run&name=${encodeURIComponent(run?.name || '')}&back=${encodeURIComponent(window.location.pathname + window.location.search)}`)}
+            to={createPageUrl(`SuggestEdit?type=run&name=${encodeURIComponent(run?.name || '')}&back=${encodeURIComponent(location.pathname + location.search)}`)}
             className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600"
           >
             <Pencil className="w-3 h-3" />

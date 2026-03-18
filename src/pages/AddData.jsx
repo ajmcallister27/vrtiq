@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { createPageUrl } from '../utils';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -24,8 +24,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import DifficultyBadge from '../components/DifficultyBadge';
 
 export default function AddData() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const preselectedResortId = urlParams.get('resort');
+  const [searchParams] = useSearchParams();
+  const preselectedResortId = searchParams.get('resort');
   const queryClient = useQueryClient();
   
   const [activeTab, setActiveTab] = useState(preselectedResortId ? 'run' : 'resort');

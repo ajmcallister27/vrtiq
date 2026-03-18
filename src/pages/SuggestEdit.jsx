@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { createPageUrl } from '../utils';
 import { base44 } from '@/api/base44Client';
 import { ArrowLeft, Send, Loader2, Check } from 'lucide-react';
@@ -10,10 +10,10 @@ import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 
 export default function SuggestEdit() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const type = urlParams.get('type') || 'run'; // 'run' or 'resort'
-  const name = urlParams.get('name') || '';
-  const backUrl = urlParams.get('back') || '';
+  const [searchParams] = useSearchParams();
+  const type = searchParams.get('type') || 'run'; // 'run' or 'resort'
+  const name = searchParams.get('name') || '';
+  const backUrl = searchParams.get('back') || '';
 
   const [yourName, setYourName] = useState('');
   const [yourEmail, setYourEmail] = useState('');
