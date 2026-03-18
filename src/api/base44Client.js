@@ -10,5 +10,5 @@ export const base44 = createClient({
   functionsVersion,
   serverUrl: 'https://vrtiq.base44.app',
   requiresAuth: false,
-  appBaseUrl
+  appBaseUrl: 'https://vrtiq.base44.app'
 });
