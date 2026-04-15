@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { createPageUrl } from '../utils';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Mountain, Map, Loader2, Check, ChevronRight, 
-  Plus, ArrowLeft
+  Plus
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -59,12 +59,12 @@ export default function AddData() {
 
   const { data: resorts = [] } = useQuery({
     queryKey: ['resorts'],
-    queryFn: () => base44.entities.Resort.list()
+    queryFn: () => api.entities.Resort.list()
   });
 
   // Mutations
   const resortMutation = useMutation({
-    mutationFn: (data) => base44.entities.Resort.create(data),
+    mutationFn: (data) => api.entities.Resort.create(data),
     onSuccess: (newResort) => {
       queryClient.invalidateQueries(['resorts']);
       setResortForm({
@@ -78,7 +78,7 @@ export default function AddData() {
   });
 
   const runMutation = useMutation({
-    mutationFn: (data) => base44.entities.Run.create(data),
+    mutationFn: (data) => api.entities.Run.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries(['runs']);
       const resortId = runForm.resort_id;

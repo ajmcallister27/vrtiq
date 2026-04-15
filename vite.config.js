@@ -1,6 +1,6 @@
-import base44 from "@base44/vite-plugin"
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
+import { fileURLToPath, URL } from 'node:url'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // compute repo name from the GitHub Actions environment, fallback to manual string
@@ -15,21 +15,28 @@ const basePath = process.env.NODE_ENV === 'production' ? `/${repoName}/` : '/'
 export default defineConfig({
   base: '/',
   logLevel: 'error', // Suppress warnings, only show errors
+  resolve: {
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+    },
+  },
   build: {
     minify: 'esbuild', // fast minification
     rollupOptions: {
       // code splitting is enabled by default
     }
   },
+  server: {
+    proxy: {
+      '/api': {
+        target: process.env.VITE_API_BASE_URL || 'http://localhost:3000',
+        changeOrigin: true,
+        // Forward /api/* requests to the backend /api/v1/* endpoints
+        rewrite: (path) => path.replace(/^\/api/, '/api/v1'),
+      },
+    },
+  },
   plugins: [
-    base44({
-      // Support for legacy code that imports the base44 SDK with @/integrations, @/entities, etc.
-      // can be removed if the code has been updated to use the new SDK imports from @base44/sdk
-      legacySDKImports: process.env.BASE44_LEGACY_SDK_IMPORTS === 'true',
-      hmrNotifier: true,
-      navigationNotifier: true,
-      visualEditAgent: true
-    }),
     react(),
     VitePWA({
       registerType: 'autoUpdate',

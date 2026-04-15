@@ -50,18 +50,22 @@
 import AddData from './pages/AddData';
 import Compare from './pages/Compare';
 import Home from './pages/Home';
+import Login from './pages/Login';
 import Resort from './pages/Resort';
 import Resorts from './pages/Resorts';
 import RunDetail from './pages/RunDetail';
 import SeedData from './pages/SeedData';
 import SuggestEdit from './pages/SuggestEdit';
+import Admin from './pages/Admin';
 import __Layout from './Layout.jsx';
 
 
 export const PAGES = {
     "AddData": AddData,
+    "Admin": Admin,
     "Compare": Compare,
     "Home": Home,
+    "Login": Login,
     "Resort": Resort,
     "Resorts": Resorts,
     "RunDetail": RunDetail,

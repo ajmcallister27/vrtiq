@@ -1,23 +1,18 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { createPageUrl } from '../utils';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { useQuery } from '@tanstack/react-query';
 import { 
   MapPin, Plus, Loader2, ArrowDown, ArrowUp,
   ExternalLink, Mountain, Map as MapIcon, Pencil
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import RunCard from '../components/RunCard';
 import DifficultyBadge from '../components/DifficultyBadge';
 import EmptyState from '../components/EmptyState';
+import { useRatingMode } from '@/lib/RatingModeContext';
 
 const difficultyOrder = { green: 1, blue: 2, black: 3, double_black: 4, terrain_park: 5 };
 
@@ -29,23 +24,24 @@ export default function Resort() {
   const [sortBy, setSortBy] = useState('official'); // official, crowd, name
   const [filterDifficulty, setFilterDifficulty] = useState('all');
   const [sortOrder, setSortOrder] = useState('asc');
+  const { ratingMode } = useRatingMode();
 
   const { data: resort, isLoading: resortLoading } = useQuery({
     queryKey: ['resort', resortId],
-    queryFn: () => base44.entities.Resort.filter({ id: resortId }),
+    queryFn: () => api.entities.Resort.filter({ id: resortId }),
     enabled: !!resortId,
     select: (data) => data[0]
   });
 
   const { data: runs = [], isLoading: runsLoading } = useQuery({
     queryKey: ['runs', resortId],
-    queryFn: () => base44.entities.Run.filter({ resort_id: resortId }),
+    queryFn: () => api.entities.Run.filter({ resort_id: resortId }),
     enabled: !!resortId
   });
 
   const { data: ratings = [] } = useQuery({
-    queryKey: ['ratings'],
-    queryFn: () => base44.entities.DifficultyRating.list()
+    queryKey: ['ratings', ratingMode],
+    queryFn: () => api.entities.DifficultyRating.filter({ mode: ratingMode })
   });
 
   // Calculate average ratings per run
@@ -132,7 +128,7 @@ export default function Resort() {
               </a>
             )}
             <Link
-              to={createPageUrl(`SuggestEdit?type=resort&name=${encodeURIComponent(resort.name)}&back=${encodeURIComponent(location.pathname + location.search)}`)}
+              to={createPageUrl(`SuggestEdit?type=resort&id=${encodeURIComponent(resort.id)}&name=${encodeURIComponent(resort.name)}&back=${encodeURIComponent(location.pathname + location.search)}`)}
               className="p-2 text-slate-400 hover:text-slate-600 inline-flex items-center gap-1 text-xs"
             >
               <Pencil className="w-4 h-4" />

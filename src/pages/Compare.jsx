@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   GitCompare, Loader2, Plus, Check, 
@@ -12,7 +12,6 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -28,9 +27,11 @@ import {
 import DifficultyBadge from '../components/DifficultyBadge';
 import CrowdRating from '../components/CrowdRating';
 import EmptyState from '../components/EmptyState';
+import { useRatingMode } from '@/lib/RatingModeContext';
 
 export default function Compare() {
   const queryClient = useQueryClient();
+  const { ratingMode } = useRatingMode();
   const [showForm, setShowForm] = useState(false);
   const [selectedResorts, setSelectedResorts] = useState([]);
   const [resortSearch, setResortSearch] = useState('');
@@ -44,27 +45,27 @@ export default function Compare() {
 
   const { data: resorts = [] } = useQuery({
     queryKey: ['resorts'],
-    queryFn: () => base44.entities.Resort.list()
+    queryFn: () => api.entities.Resort.list()
   });
 
   const { data: allRuns = [] } = useQuery({
     queryKey: ['runs'],
-    queryFn: () => base44.entities.Run.list()
+    queryFn: () => api.entities.Run.list()
   });
 
   const { data: comparisons = [], isLoading } = useQuery({
     queryKey: ['comparisons'],
-    queryFn: () => base44.entities.CrossResortComparison.list()
+    queryFn: () => api.entities.CrossResortComparison.list()
   });
 
   const { data: ratings = [] } = useQuery({
-    queryKey: ['ratings'],
-    queryFn: () => base44.entities.DifficultyRating.list()
+    queryKey: ['ratings', ratingMode],
+    queryFn: () => api.entities.DifficultyRating.filter({ mode: ratingMode })
   });
 
   const { data: currentUser } = useQuery({
     queryKey: ['me'],
-    queryFn: () => base44.auth.me()
+    queryFn: () => api.auth.me()
   });
 
   // Resorts where the current user has rated a run
@@ -127,7 +128,7 @@ export default function Compare() {
     : [];
 
   const comparisonMutation = useMutation({
-    mutationFn: (data) => base44.entities.CrossResortComparison.create(data),
+    mutationFn: (data) => api.entities.CrossResortComparison.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries(['comparisons']);
       setShowForm(false);

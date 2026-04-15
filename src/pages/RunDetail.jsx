@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { createPageUrl } from '../utils';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   ArrowLeft, Loader2, Cog, Mountain, MessageSquare, 
@@ -22,6 +22,8 @@ import CrowdRating from '../components/CrowdRating';
 import TagBadge, { availableTags } from '../components/TagBadge';
 import RatingSlider from '../components/RatingSlider';
 import EmptyState from '../components/EmptyState';
+import { useRatingMode } from '@/lib/RatingModeContext';
+import { getRatingModeLabel } from '@/lib/ratingMode';
 import { format } from 'date-fns';
 
 export default function RunDetail() {
@@ -29,6 +31,7 @@ export default function RunDetail() {
   const location = useLocation();
   const runId = searchParams.get('id');
   const queryClient = useQueryClient();
+  const { ratingMode } = useRatingMode();
   
   const [showRatingForm, setShowRatingForm] = useState(false);
   const [showNoteForm, setShowNoteForm] = useState(false);
@@ -41,26 +44,26 @@ export default function RunDetail() {
 
   const { data: run, isLoading: runLoading } = useQuery({
     queryKey: ['run', runId],
-    queryFn: () => base44.entities.Run.filter({ id: runId }),
+    queryFn: () => api.entities.Run.filter({ id: runId }),
     enabled: !!runId,
     select: (data) => data[0]
   });
 
   const { data: resort } = useQuery({
     queryKey: ['resort', run?.resort_id],
-    queryFn: () => base44.entities.Resort.filter({ id: run.resort_id }),
+    queryFn: () => api.entities.Resort.filter({ id: run.resort_id }),
     enabled: !!run?.resort_id,
     select: (data) => data[0]
   });
 
   const { data: currentUser } = useQuery({
     queryKey: ['me'],
-    queryFn: () => base44.auth.me()
+    queryFn: () => api.auth.me()
   });
 
   const { data: ratings = [] } = useQuery({
-    queryKey: ['ratings', runId],
-    queryFn: () => base44.entities.DifficultyRating.filter({ run_id: runId }),
+    queryKey: ['ratings', runId, ratingMode],
+    queryFn: () => api.entities.DifficultyRating.filter({ run_id: runId, mode: ratingMode }),
     enabled: !!runId
   });
 
@@ -69,24 +72,24 @@ export default function RunDetail() {
 
   const { data: notes = [] } = useQuery({
     queryKey: ['notes', runId],
-    queryFn: () => base44.entities.ConditionNote.filter({ run_id: runId }),
+    queryFn: () => api.entities.ConditionNote.filter({ run_id: runId }),
     enabled: !!runId
   });
 
   const { data: allRuns = [] } = useQuery({
     queryKey: ['all-runs'],
-    queryFn: () => base44.entities.Run.list(),
+    queryFn: () => api.entities.Run.list(),
   });
 
   const { data: allResorts = [] } = useQuery({
     queryKey: ['all-resorts'],
-    queryFn: () => base44.entities.Resort.list(),
+    queryFn: () => api.entities.Resort.list(),
   });
 
   const { data: comparisons = [] } = useQuery({
     queryKey: ['comparisons', runId],
     queryFn: async () => {
-      const all = await base44.entities.CrossResortComparison.list();
+      const all = await api.entities.CrossResortComparison.list();
       return all.filter(c => c.run1_id === runId || c.run2_id === runId);
     },
     enabled: !!runId
@@ -114,9 +117,9 @@ export default function RunDetail() {
 
   // Mutations
   const ratingMutation = useMutation({
-    mutationFn: (data) => base44.entities.DifficultyRating.create(data),
+    mutationFn: (data) => api.entities.DifficultyRating.create(data),
     onSuccess: () => {
-      queryClient.invalidateQueries(['ratings', runId]);
+      queryClient.invalidateQueries(['ratings']);
       setShowRatingForm(false);
       setNewRating(5);
       setRatingComment('');
@@ -124,7 +127,7 @@ export default function RunDetail() {
   });
 
   const noteMutation = useMutation({
-    mutationFn: (data) => base44.entities.ConditionNote.create(data),
+    mutationFn: (data) => api.entities.ConditionNote.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries(['notes', runId]);
       setShowNoteForm(false);
@@ -136,6 +139,7 @@ export default function RunDetail() {
   const handleSubmitRating = () => {
     ratingMutation.mutate({
       run_id: runId,
+      mode: ratingMode,
       rating: newRating,
       skill_level: skillLevel,
       conditions: conditions,
@@ -196,7 +200,7 @@ export default function RunDetail() {
             {resort?.name || 'Back'}
           </Link>
           <Link
-            to={createPageUrl(`SuggestEdit?type=run&name=${encodeURIComponent(run?.name || '')}&back=${encodeURIComponent(location.pathname + location.search)}`)}
+            to={createPageUrl(`SuggestEdit?type=run&id=${encodeURIComponent(runId)}&name=${encodeURIComponent(run?.name || '')}&back=${encodeURIComponent(location.pathname + location.search)}`)}
             className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600"
           >
             <Pencil className="w-3 h-3" />
@@ -221,13 +225,13 @@ export default function RunDetail() {
         <div className="mt-6 p-4 bg-slate-50 rounded-xl">
           <div className="flex items-center justify-between">
             <div>
-              <span className="text-xs uppercase tracking-wider text-slate-400 font-medium">Crowd Rating</span>
+              <span className="text-xs uppercase tracking-wider text-slate-400 font-medium">{getRatingModeLabel(ratingMode)} Crowd Rating</span>
               <div className="mt-1">
                 <CrowdRating rating={avgRating} count={ratings.length} size="lg" />
               </div>
             </div>
             {userRatedToday ? (
-              <span className="text-xs text-slate-400 text-right max-w-24">Already rated today</span>
+              <span className="text-xs text-slate-400 text-right max-w-24">Already rated {getRatingModeLabel(ratingMode).toLowerCase()} today</span>
             ) : (
               <Button 
                 onClick={() => setShowRatingForm(!showRatingForm)}
@@ -242,7 +246,8 @@ export default function RunDetail() {
         {/* Rating Form */}
         {showRatingForm && (
           <Card className="mt-4 p-4 border-sky-200 bg-sky-50/50">
-            <h3 className="font-semibold text-slate-900 mb-4">Submit Your Rating</h3>
+            <h3 className="font-semibold text-slate-900 mb-2">Submit Your Rating</h3>
+            <p className="text-xs text-slate-500 mb-4">Submitting in {getRatingModeLabel(ratingMode)} mode.</p>
             
             <RatingSlider value={newRating} onChange={setNewRating} />
             
@@ -508,7 +513,7 @@ export default function RunDetail() {
       {ratings.length > 0 && (
         <div className="px-4 py-4 border-t border-slate-100">
           <h2 className="text-sm font-semibold text-slate-900 mb-3">
-            Recent Ratings
+            Recent {getRatingModeLabel(ratingMode)} Ratings
           </h2>
           <div className="space-y-2">
             {ratings

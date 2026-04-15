@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { useQuery } from '@tanstack/react-query';
 import { RESORT_CATALOG } from '../components/resortCatalog';
 import { RUN_CATALOG } from '../components/runCatalog';
@@ -12,7 +12,7 @@ export default function SeedData() {
 
   const { data: existingResorts = [] } = useQuery({
     queryKey: ['resorts'],
-    queryFn: () => base44.entities.Resort.list('-created_date', 200),
+    queryFn: () => api.entities.Resort.list('-created_date', 200),
   });
 
   const addLog = (msg) => setLog(prev => [...prev, msg]);
@@ -38,7 +38,7 @@ export default function SeedData() {
       for (let i = 0; i < resortsToAdd.length; i += 10) {
         const batch = resortsToAdd.slice(i, i + 10);
         const results = await Promise.all(
-          batch.map(r => base44.entities.Resort.create({
+          batch.map(r => api.entities.Resort.create({
             name: r.name,
             location: r.location,
             country: r.country,
@@ -60,7 +60,7 @@ export default function SeedData() {
 
       // Step 2: Seed runs
       addLog('Seeding runs...');
-      const existingRuns = await base44.entities.Run.list('-created_date', 500);
+      const existingRuns = await api.entities.Run.list('-created_date', 500);
       const existingRunKeys = new Set(existingRuns.map(r => `${r.resort_id}::${r.name.toLowerCase()}`));
 
       let runsAdded = 0;
@@ -74,7 +74,7 @@ export default function SeedData() {
             if (!resortId) { runsSkipped++; return; }
             const key = `${resortId}::${run.name.toLowerCase()}`;
             if (existingRunKeys.has(key)) { runsSkipped++; return; }
-            await base44.entities.Run.create({
+            await api.entities.Run.create({
               name: run.name,
               resort_id: resortId,
               official_difficulty: run.official_difficulty,

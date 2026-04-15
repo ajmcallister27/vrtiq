@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { useQuery } from '@tanstack/react-query';
 import { Search, Plus, Mountain, Loader2, Filter } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -21,12 +21,12 @@ export default function Resorts() {
 
   const { data: resorts = [], isLoading } = useQuery({
     queryKey: ['resorts'],
-    queryFn: () => base44.entities.Resort.list()
+    queryFn: () => api.entities.Resort.list()
   });
 
   const { data: runs = [] } = useQuery({
     queryKey: ['runs'],
-    queryFn: () => base44.entities.Run.list()
+    queryFn: () => api.entities.Run.list()
   });
 
   // Calculate run counts

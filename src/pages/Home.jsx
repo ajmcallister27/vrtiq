@@ -1,34 +1,39 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { useQuery } from '@tanstack/react-query';
-import { Search, MapPin, Loader2, Navigation, Plus, Mountain, TrendingUp, X, Star } from 'lucide-react';
+import { Search, MapPin, Loader2, Navigation, Mountain, TrendingUp, X, Star } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/lib/AuthContext';
 import ResortCard from '../components/ResortCard';
 import RunCard from '../components/RunCard';
 import EmptyState from '../components/EmptyState';
 import NearbyResortMap from '../components/NearbyResortMap';
+import { useRatingMode } from '@/lib/RatingModeContext';
+import { getRatingModeLabel } from '@/lib/ratingMode';
 
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [userLocation, setUserLocation] = useState(null);
   const [locationLoading, setLocationLoading] = useState(false);
+  const { user } = useAuth();
+  const { ratingMode } = useRatingMode();
 
   const { data: resorts = [], isLoading: resortsLoading } = useQuery({
     queryKey: ['resorts'],
-    queryFn: () => base44.entities.Resort.list()
+    queryFn: () => api.entities.Resort.list()
   });
 
   const { data: runs = [] } = useQuery({
     queryKey: ['runs'],
-    queryFn: () => base44.entities.Run.list()
+    queryFn: () => api.entities.Run.list()
   });
 
   const { data: ratings = [] } = useQuery({
-    queryKey: ['ratings'],
-    queryFn: () => base44.entities.DifficultyRating.list()
+    queryKey: ['ratings', ratingMode],
+    queryFn: () => api.entities.DifficultyRating.filter({ mode: ratingMode })
   });
 
   // Calculate run counts per resort
@@ -95,9 +100,25 @@ export default function Home() {
     }
   };
 
-  // Resorts where user has rated a run (favorites)
+  // Use the authenticated user's unique auth identity to scope ratings to this user only.
+  const currentUserId = user?.id;
+  const currentUserEmail = user?.email;
+  const currentUserRatings = ratings.filter((rating) => {
+    if (!currentUserId && !currentUserEmail) return false;
+
+    return (
+      (currentUserEmail && rating.created_by === currentUserEmail) ||
+      (currentUserId && (
+        rating.created_by === currentUserId ||
+        rating.created_by_id === currentUserId ||
+        rating.user_id === currentUserId
+      ))
+    );
+  });
+
+  // Resorts where the authenticated user has rated a run
   const favoriteResortIds = new Set(
-    ratings
+    currentUserRatings
       .map(r => {
         const run = runs.find(run => run.id === r.run_id);
         return run?.resort_id;
@@ -162,7 +183,7 @@ export default function Home() {
           Find Real Difficulty
         </h1>
         <p className="text-slate-500 text-sm mb-6">
-          Crowd-sourced ratings from skiers, not marketing
+          Crowd-sourced ratings for {getRatingModeLabel(ratingMode).toLowerCase()} mode
         </p>
 
         {/* Search */}
@@ -253,7 +274,7 @@ export default function Home() {
               {resortsLoading ? (
                 <div className="flex items-center justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
               ) : favoriteResorts.length === 0 ? (
-                <p className="text-sm text-slate-400 py-4 text-center">Rate a run to track resorts you've visited</p>
+                <p className="text-sm text-slate-400 py-4 text-center">No personal resort ratings yet. Rate a run to start building your list.</p>
               ) : (
                 <div className="space-y-2">
                   {favoriteResorts.slice(0, 6).map(resort => (

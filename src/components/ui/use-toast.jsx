@@ -1,8 +1,9 @@
 // Inspired by react-hot-toast library
 import { useState, useEffect } from "react";
 
-const TOAST_LIMIT = 20;
-const TOAST_REMOVE_DELAY = 1000000;
+const TOAST_LIMIT = 1;
+const TOAST_REMOVE_DELAY = 250;
+const TOAST_AUTO_DISMISS_DELAY = 5000;
 
 const actionTypes = {
   ADD_TOAST: "ADD_TOAST",
@@ -19,6 +20,7 @@ function genId() {
 }
 
 const toastTimeouts = new Map();
+const toastAutoDismissTimeouts = new Map();
 
 const addToRemoveQueue = (toastId) => {
   if (toastTimeouts.has(toastId)) {
@@ -41,6 +43,14 @@ const _clearFromRemoveQueue = (toastId) => {
   if (timeout) {
     clearTimeout(timeout);
     toastTimeouts.delete(toastId);
+  }
+};
+
+const clearAutoDismissTimeout = (toastId) => {
+  const timeout = toastAutoDismissTimeouts.get(toastId);
+  if (timeout) {
+    clearTimeout(timeout);
+    toastAutoDismissTimeouts.delete(toastId);
   }
 };
 
@@ -113,6 +123,9 @@ function dispatch(action) {
 function toast({ ...props }) {
   const id = genId();
 
+  // Ensure only one timer exists per toast and enforce 5s auto dismiss.
+  clearAutoDismissTimeout(id);
+
   const update = (props) =>
     dispatch({
       type: actionTypes.UPDATE_TOAST,
@@ -134,9 +147,18 @@ function toast({ ...props }) {
     },
   });
 
+  const autoDismissTimeout = setTimeout(() => {
+    dismiss();
+    toastAutoDismissTimeouts.delete(id);
+  }, TOAST_AUTO_DISMISS_DELAY);
+  toastAutoDismissTimeouts.set(id, autoDismissTimeout);
+
   return {
     id,
-    dismiss,
+    dismiss: () => {
+      clearAutoDismissTimeout(id);
+      dismiss();
+    },
     update,
   };
 }
@@ -157,7 +179,15 @@ function useToast() {
   return {
     ...state,
     toast,
-    dismiss: (toastId) => dispatch({ type: actionTypes.DISMISS_TOAST, toastId }),
+    dismiss: (toastId) => {
+      if (toastId) {
+        clearAutoDismissTimeout(toastId);
+      } else {
+        toastAutoDismissTimeouts.forEach((timeout) => clearTimeout(timeout));
+        toastAutoDismissTimeouts.clear();
+      }
+      dispatch({ type: actionTypes.DISMISS_TOAST, toastId });
+    },
   };
 }
 
