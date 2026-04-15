@@ -40,8 +40,8 @@ export default function RatingModeToggle({ className }) {
   ];
 
   return (
-    <div className={cn('inline-flex items-center gap-0.5 rounded-full border border-slate-200 bg-slate-50 p-0.5 shadow-sm', className)}>
-      <span className="hidden sm:inline text-[10px] uppercase tracking-wider text-slate-400 font-medium px-2">
+    <div className={cn('inline-flex items-center gap-0.5 rounded-full border border-slate-200 bg-slate-50 p-0.5 shadow-sm whitespace-nowrap', className)}>
+      <span className="text-[10px] uppercase tracking-wider text-slate-400 font-medium px-2">
         Mode
       </span>
       {options.map(({ value, label, icon: Icon }) => {
@@ -55,14 +55,14 @@ export default function RatingModeToggle({ className }) {
             aria-pressed={active}
             aria-label={label}
             className={cn(
-              'inline-flex items-center justify-center rounded-full px-2 py-1.5 text-[11px] font-medium transition-all sm:px-3 sm:gap-1.5 sm:text-sm',
+              'inline-flex items-center justify-center rounded-full px-3 py-1.5 text-sm font-medium gap-1.5 transition-all shrink-0',
               active
                 ? 'bg-slate-900 text-white shadow-sm'
                 : 'text-slate-500 hover:text-slate-900 hover:bg-white'
             )}
           >
             <Icon className="w-5 h-5 shrink-0" />
-            <span className="hidden sm:inline">{label}</span>
+            <span>{label}</span>
           </button>
         );
       })}
