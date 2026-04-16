@@ -1,0 +1,26 @@
+[Unit]
+Description=vrtIQ Backend API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vrtiq
+Group=vrtiq
+WorkingDirectory=/srv/vrtiq/app/backend
+EnvironmentFile=/etc/vrtiq/backend.env
+ExecStart=/usr/bin/node /srv/vrtiq/app/backend/server.js
+Restart=always
+RestartSec=5
+TimeoutStopSec=15
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/lib/vrtiq /var/log/vrtiq /srv/vrtiq/app/backend
+LimitNOFILE=65535
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,22 +1,21 @@
 import jwt from 'jsonwebtoken';
-import dotenv from 'dotenv';
-
-dotenv.config();
-
-const JWT_SECRET = process.env.JWT_SECRET;
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
-
-if (!JWT_SECRET) {
-  console.warn('WARNING: JWT_SECRET is not set. Tokens will not be secure.');
-}
+import { appConfig } from '../config/env.js';
 
 export function signToken(payload) {
-  return jwt.sign(payload, JWT_SECRET || 'changeme', {
-    expiresIn: JWT_EXPIRES_IN,
+  if (!appConfig.jwtSecret) {
+    throw new Error('JWT_SECRET must be configured before issuing tokens');
+  }
+
+  return jwt.sign(payload, appConfig.jwtSecret, {
+    expiresIn: appConfig.jwtExpiresIn,
   });
 }
 
 export function verifyToken(token) {
   if (!token) throw new Error('No token provided');
-  return jwt.verify(token, JWT_SECRET || 'changeme');
+  if (!appConfig.jwtSecret) {
+    throw new Error('JWT_SECRET must be configured before verifying tokens');
+  }
+
+  return jwt.verify(token, appConfig.jwtSecret);
 }

@@ -1,10 +1,8 @@
-import dotenv from 'dotenv';
-
-dotenv.config();
+import { appConfig } from '../config/env.js';
 
 export function getPublicSettings(req, res) {
   const appId = req.params.id;
-  const requireAuth = String(process.env.REQUIRE_AUTH || 'false').toLowerCase() === 'true';
+  const requireAuth = appConfig.requireAuth;
 
   // If auth is required but user is not authenticated, return 403 with extra_data for client handling
   if (requireAuth && !req.user?.email) {
@@ -21,7 +19,7 @@ export function getPublicSettings(req, res) {
   res.json({
     id: appId,
     public_settings: {
-      app_name: process.env.APP_NAME || 'vrtIQ',
+      app_name: appConfig.appName,
       require_auth: requireAuth
     }
   });

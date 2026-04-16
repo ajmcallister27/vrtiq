@@ -25,6 +25,12 @@ Copy the example env file and edit as needed:
 cp .env.example .env
 ```
 
+Important environment behavior:
+- In `production`, startup fails if `JWT_SECRET` is missing.
+- In `production`, startup fails if `CORS_ALLOWED_ORIGINS` is empty.
+- `CORS_ALLOWED_ORIGINS` must be a comma-separated explicit allowlist.
+- `DATABASE_URL` supports relative SQLite paths (for local dev) and absolute SQLite paths (for production).
+
 ### 3) Initialize the database
 
 ```bash
@@ -42,6 +48,11 @@ npm run dev
 ```
 
 The server listens on `http://localhost:3000` by default.
+
+Health endpoints:
+- `GET /health/live`
+- `GET /health/ready`
+- `GET /health` (backward-compatible alias)
 
 ---
 
@@ -66,3 +77,17 @@ Alternatively, you can add a hosts entry to point `vrtiq.base44.app` to `127.0.0
 
 - The backend enforces JWT auth for creating/updating entities and integration endpoints.
 - A default admin user is created by `npm run seed` (email/password in `.env`).
+
+## Production Operations
+
+Deployment and guardrail scripts:
+
+```bash
+npm run deploy:check      # capacity/storage guardrails
+npm run migrate:deploy    # production Prisma migrations
+npm run backup:db         # SQLite backup with retention pruning
+npm run prune:storage     # backups/logs/artifacts pruning
+```
+
+Systemd units and timers are in `deploy/systemd/`.
+See the repository root deployment guide: `../PRODUCTION_ORACLE_ALWAYS_FREE.md`.

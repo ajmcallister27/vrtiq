@@ -7,17 +7,25 @@
   "scripts": {
     "dev": "node server.js",
     "start": "node server.js",
+    "start:prod": "NODE_ENV=production node server.js",
     "migrate": "npx prisma migrate dev --name init",
+    "migrate:deploy": "npx prisma migrate deploy",
     "generate": "npx prisma generate",
-    "seed": "node prisma/seed.js"
+    "seed": "node prisma/seed.js",
+    "deploy:check": "bash ./deploy/predeploy-check.sh",
+    "backup:db": "bash ./deploy/backup-db.sh",
+    "prune:storage": "bash ./deploy/prune-storage.sh"
   },
   "dependencies": {
     "@prisma/client": "^5.13.0",
     "bcrypt": "^5.1.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
+    "envalid": "^8.1.1",
     "express": "^4.18.2",
     "express-async-errors": "^3.1.1",
+    "express-rate-limit": "^8.3.2",
+    "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.1",
     "multer": "^1.4.5-lts.1",
     "sqlite3": "^5.1.6"
