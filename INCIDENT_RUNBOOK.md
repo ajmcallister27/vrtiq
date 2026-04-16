@@ -12,8 +12,8 @@ This runbook covers backend incident triage, rollback, and SQLite backup/restore
 
 1. Confirm health endpoints:
 ```bash
-curl -f https://api.vrtiq.example/health/live
-curl -f https://api.vrtiq.example/health/ready
+curl -f https://api.vrtiq.com/health/live
+curl -f https://api.vrtiq.com/health/ready
 ```
 2. Check service status:
 ```bash

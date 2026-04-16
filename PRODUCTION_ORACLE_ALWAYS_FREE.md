@@ -1,6 +1,8 @@
 # vrtIQ Production Deployment on Oracle Always Free
 
-This guide is the single source of truth for deploying vrtIQ backend to Oracle Always Free on Ubuntu with GitHub Pages frontend.
+This guide is the single source of truth for deploying vrtIQ backend to Oracle Always Free on Ubuntu with a GitHub Pages frontend.
+
+Follow it in order. If you skip a step, the most likely failure modes are CORS mismatches, missing secrets, failed Prisma migrations, or a blocked deploy workflow.
 
 ## 1) Architecture and hard limits
 
@@ -24,25 +26,66 @@ Free-tier monthly quota proofs (31-day worst case):
 
 Storage policy:
 - Combined DB + backups + logs + artifacts must remain under 200 GB.
+- Keep logs and backups pruned automatically.
 
-## 2) DNS and network
+## 2) What you need before you start
 
-1. Create Oracle VM with:
-- Image: Ubuntu 22.04 LTS
-- Shape: VM.Standard.A1.Flex
-- Shape config: 4 OCPU, 24 GB memory
-- Boot volume: 50 to 100 GB
-- Static public IPv4 attached
+You need:
+- An Oracle Cloud account with Always Free capacity available in your region.
+- A domain or subdomain for the API, such as `api.vrtiq.com`.
+- Access to the GitHub repository and the ability to set GitHub Secrets.
+- An SSH key pair for the server and GitHub Actions deploys.
+- The frontend origin list you will allow in CORS. If your GitHub Pages site uses a custom domain, the origin is typically `https://vrtiq.com`.
 
-2. Open security rules:
-- TCP 22
-- TCP 80
-- TCP 443
+## 3) Oracle Cloud setup
 
-3. Create DNS A record:
-- `api.vrtiq.example` -> VM static public IP
+### 3.1 Pick the right region
 
-## 3) Server bootstrap
+1. Sign in to Oracle Cloud.
+2. Use a region that still has Always Free Ampere A1 capacity.
+3. If your current region has no capacity, switch to a region that does.
+
+### 3.2 Create the compute instance
+
+1. Open the Compute service and create a new instance.
+2. Choose a shape in the Always Free family.
+3. Select `VM.Standard.A1.Flex`.
+4. Set the shape to exactly:
+- 4 OCPU
+- 24 GB memory
+5. Use Ubuntu 22.04 LTS as the image.
+6. Leave autoscaling disabled.
+7. Add your SSH public key during instance creation.
+8. Attach a public IPv4 address.
+9. Set the boot volume to something reasonable, such as 50 to 100 GB.
+
+### 3.3 Network rules
+
+Use either a security list or NSG, but be consistent.
+
+Open inbound TCP ports:
+- 22 for SSH
+- 80 for HTTP redirect and ACME challenge handling
+- 443 for HTTPS
+
+No other public inbound ports are required.
+
+### 3.4 Storage guardrail on Oracle
+
+Do not attach extra block volumes unless you need them and can still stay under the 200 GB total storage budget.
+
+Recommended layout:
+- Boot volume for OS and app checkout.
+- SQLite database and backups under `/var/lib/vrtiq`.
+- Logs under `/var/log/vrtiq`.
+
+### 3.5 Create DNS
+
+1. Create an A record for your API hostname.
+2. Point it at the instance public IPv4 address.
+3. Wait for DNS propagation before testing HTTPS.
+
+## 4) Server bootstrap
 
 SSH in and install base packages:
 
@@ -79,7 +122,7 @@ Switch user:
 sudo su - vrtiq
 ```
 
-## 4) Install Node and Caddy
+## 5) Install Node and Caddy
 
 ```bash
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
@@ -96,7 +139,7 @@ sudo apt update
 sudo apt install -y caddy
 ```
 
-## 5) Clone and prepare app
+## 6) Clone and prepare app
 
 ```bash
 sudo mkdir -p /srv/vrtiq
@@ -112,7 +155,7 @@ npm ci
 npm run generate
 ```
 
-## 6) Backend environment
+## 7) Backend environment
 
 Create runtime environment file for systemd:
 
@@ -137,7 +180,7 @@ PORT=3000
 DATABASE_URL=file:/var/lib/vrtiq/db/prod.db
 JWT_SECRET=paste-output-from-openssl-rand-hex-48
 JWT_EXPIRES_IN=7d
-CORS_ALLOWED_ORIGINS=https://ajmcallister27.github.io,https://vrtiq.example
+CORS_ALLOWED_ORIGINS=https://vrtiq.com
 BODY_JSON_LIMIT=1mb
 BODY_URLENCODED_LIMIT=100kb
 RATE_LIMIT_WINDOW_MS=900000
@@ -155,8 +198,9 @@ Notes:
 - Backend will refuse startup in production if `JWT_SECRET` is missing.
 - Backend will refuse startup in production if `CORS_ALLOWED_ORIGINS` is empty.
 - CORS allowlist is strict and wildcard origins are rejected.
+- If you use a different frontend domain, update `CORS_ALLOWED_ORIGINS` before starting the service.
 
-## 7) Install systemd units
+## 8) Install systemd units
 
 ```bash
 sudo cp /srv/vrtiq/app/backend/deploy/systemd/vrtiq-backend.service /etc/systemd/system/
@@ -189,13 +233,15 @@ curl -f http://127.0.0.1:3000/health/live
 curl -f http://127.0.0.1:3000/health/ready
 ```
 
-## 8) TLS reverse proxy with Caddy
+## 9) Configure Caddy for TLS
+
+Caddy handles certificates automatically once DNS points to the server and port 80/443 are open.
 
 Set Caddy site:
 
 ```bash
 sudo tee /etc/caddy/Caddyfile > /dev/null <<'CADDY'
-api.vrtiq.example {
+api.vrtiq.com {
   encode zstd gzip
   reverse_proxy 127.0.0.1:3000
 }
@@ -208,11 +254,13 @@ sudo systemctl status caddy --no-pager
 Verify HTTPS:
 
 ```bash
-curl -f https://api.vrtiq.example/health/live
-curl -f https://api.vrtiq.example/health/ready
+curl -f https://api.vrtiq.com/health/live
+curl -f https://api.vrtiq.com/health/ready
 ```
 
-## 9) First deploy and guardrail checks
+## 10) First deploy and guardrail checks
+
+Before the first production start, run the pre-deploy guardrail script.
 
 Run pre-deploy guardrail check (required):
 
@@ -226,7 +274,9 @@ Manual projection check values shown by script must remain:
 - Memory GB-hours <= 18000
 - Storage <= 200 GB
 
-## 10) Auto deploy from GitHub on push to master
+If any of those values are exceeded, reduce capacity or storage before proceeding.
+
+## 11) Auto deploy from GitHub on push to master
 
 Workflow file is already in repo:
 - `.github/workflows/deploy-backend.yml`
@@ -261,7 +311,18 @@ Deploy script is idempotent and fail-fast:
 - restart service
 - verify readiness endpoint
 
-## 11) Rollback
+Recommended first deployment order:
+1. Provision Oracle VM.
+2. Clone repo.
+3. Configure environment file.
+4. Run migrations.
+5. Start service.
+6. Test local health endpoints.
+7. Configure Caddy.
+8. Test public HTTPS endpoint.
+9. Turn on GitHub Actions deploy.
+
+## 12) Rollback
 
 If latest deployment is bad:
 
@@ -282,7 +343,7 @@ curl -f http://127.0.0.1:3000/health/ready
 
 Then push a revert commit to master so repo state matches running state.
 
-## 12) Backups and retention
+## 13) Backups and retention
 
 Automated:
 - `vrtiq-backup.timer` runs daily at 02:15 UTC.
@@ -306,7 +367,7 @@ cd /srv/vrtiq/app/backend
 bash ./deploy/prune-storage.sh
 ```
 
-## 13) Monitoring and alerts
+## 14) Monitoring and alerts
 
 Create Oracle Monitoring alarms for:
 - Compute usage percentage (70%, 85%, 95%)
@@ -325,7 +386,7 @@ cd /srv/vrtiq/app/backend
 bash ./deploy/predeploy-check.sh
 ```
 
-## 14) Smoke checks after deploy
+## 15) Smoke checks after deploy
 
 1. `GET /health/live` returns 200.
 2. `GET /health/ready` returns 200.
@@ -335,3 +396,12 @@ bash ./deploy/predeploy-check.sh
 6. `sudo systemctl status vrtiq-backend` is active after restart.
 7. Backups are generated and old backups are pruned.
 8. Combined storage remains below 200 GB.
+
+## 16) Recovery checklist
+
+If the server fails to come up after a deploy:
+1. Check `sudo journalctl -u vrtiq-backend -n 200 --no-pager`.
+2. Confirm `/etc/vrtiq/backend.env` has the right values.
+3. Confirm the SQLite file path exists and is writable by `vrtiq`.
+4. Run `bash ./deploy/predeploy-check.sh` again.
+5. Roll back using the steps above if the failure is tied to the last commit.
