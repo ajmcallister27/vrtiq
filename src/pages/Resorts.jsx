@@ -53,9 +53,9 @@ export default function Resorts() {
     });
 
   return (
-    <div className="pb-6">
+    <div className="pb-8">
       {/* Header */}
-      <div className="px-4 pt-6 pb-4">
+      <div className="px-4 pt-6 pb-4 lg:px-6">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-bold text-slate-900">All Resorts</h1>
           <Link to={createPageUrl('AddData')}>
@@ -99,7 +99,7 @@ export default function Resorts() {
       </div>
 
       {/* Results */}
-      <div className="px-4">
+      <div className="px-4 lg:px-6">
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
@@ -119,8 +119,8 @@ export default function Resorts() {
             }
           />
         ) : (
-          <div className="space-y-2">
-            <p className="text-xs text-slate-400 mb-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <p className="text-xs text-slate-400 sm:col-span-2 xl:col-span-3">
               {filteredResorts.length} resort{filteredResorts.length !== 1 ? 's' : ''}
             </p>
             {filteredResorts.map(resort => (

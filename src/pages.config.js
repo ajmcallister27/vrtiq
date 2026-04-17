@@ -50,6 +50,9 @@
 import AddData from './pages/AddData';
 import Compare from './pages/Compare';
 import Home from './pages/Home';
+import LiftBoard from './pages/LiftBoard';
+import Lift from './pages/Lift';
+import LiftHistory from './pages/LiftHistory';
 import Login from './pages/Login';
 import Resort from './pages/Resort';
 import Resorts from './pages/Resorts';
@@ -65,6 +68,9 @@ export const PAGES = {
     "Admin": Admin,
     "Compare": Compare,
     "Home": Home,
+    "Lift": Lift,
+    "LiftBoard": LiftBoard,
+    "LiftHistory": LiftHistory,
     "Login": Login,
     "Resort": Resort,
     "Resorts": Resorts,

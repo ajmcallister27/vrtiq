@@ -13,6 +13,14 @@ const ENTITY_MAP = {
       official_difficulty: ['green', 'blue', 'black', 'double_black', 'terrain_park']
     }
   },
+  Lift: {
+    model: prisma.lift,
+    requiredFields: ['resort_id', 'name'],
+    enums: {
+      status: ['open', 'closed', 'hold'],
+      lift_type: ['chairlift', 'gondola', 'tram', 'magic_carpet', 't_bar', 'rope_tow', 'funicular', 'other']
+    }
+  },
   DifficultyRating: {
     model: prisma.difficultyRating,
     requiredFields: ['run_id', 'rating'],
@@ -24,7 +32,7 @@ const ENTITY_MAP = {
   },
   ConditionNote: {
     model: prisma.conditionNote,
-    requiredFields: ['run_id', 'note'],
+    requiredFields: ['note'],
     enums: {}
   },
   CrossResortComparison: {
@@ -32,6 +40,21 @@ const ENTITY_MAP = {
     requiredFields: ['run1_id', 'run2_id', 'comparison_type'],
     enums: {
       comparison_type: ['easier', 'similar', 'harder']
+    }
+  },
+  LiftWaitReport: {
+    model: prisma.liftWaitReport,
+    requiredFields: ['resort_id', 'lift_name', 'wait_minutes'],
+    enums: {
+      report_status: ['open', 'closed', 'hold'],
+      powder_type: ['fresh_powder', 'packed_powder', 'wet_powder', 'wind_affected', 'crud', 'unknown']
+    }
+  },
+  LiftStatusUpdate: {
+    model: prisma.liftStatusUpdate,
+    requiredFields: ['resort_id', 'lift_name', 'status'],
+    enums: {
+      status: ['open', 'closed', 'hold']
     }
   },
   User: {
@@ -133,6 +156,18 @@ function parseSort(sortParam) {
   });
 }
 
+const LIFT_REPORT_DEDUPE_WINDOW_MS = 5 * 60 * 1000;
+const LIFT_STATUS_VERIFY_WINDOW_MS = 20 * 60 * 1000;
+const ALLOWED_LIFT_CONDITIONS = ['powder', 'groomed', 'icy', 'thin cover', 'spring'];
+
+function normalizeConditionList(value) {
+  if (value === undefined || value === null) return [];
+  const raw = Array.isArray(value) ? value : String(value).split(',');
+  return raw
+    .map((item) => String(item).trim().toLowerCase())
+    .filter(Boolean);
+}
+
 export async function listEntities(req, res, next) {
   const config = getEntityConfig(req.params.entity);
   if (!config) {
@@ -222,6 +257,67 @@ function validateEntityPayload(config, data, isUpdate = false) {
     }
   }
 
+  if (config.name === 'LiftWaitReport' && data.wait_minutes !== undefined) {
+    const waitMinutes = Number(data.wait_minutes);
+    if (!Number.isInteger(waitMinutes) || waitMinutes < 0 || waitMinutes > 240) {
+      errors.push("'wait_minutes' must be an integer between 0 and 240");
+    }
+  }
+
+  if (config.name === 'LiftWaitReport') {
+    if (data.day_of_week !== undefined) {
+      const dayOfWeek = Number(data.day_of_week);
+      if (!Number.isInteger(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6) {
+        errors.push("'day_of_week' must be an integer between 0 and 6");
+      }
+    }
+    if (data.hour_of_day !== undefined) {
+      const hourOfDay = Number(data.hour_of_day);
+      if (!Number.isInteger(hourOfDay) || hourOfDay < 0 || hourOfDay > 23) {
+        errors.push("'hour_of_day' must be an integer between 0 and 23");
+      }
+    }
+
+    if (data.conditions !== undefined && data.conditions !== null && data.conditions !== '') {
+      const normalizedConditions = normalizeConditionList(data.conditions);
+      const invalid = normalizedConditions.filter((condition) => !ALLOWED_LIFT_CONDITIONS.includes(condition));
+      if (invalid.length > 0) {
+        errors.push(`'conditions' contains unsupported values: ${invalid.join(', ')}`);
+      }
+    }
+  }
+
+  if ((config.name === 'ConditionNote' || config.name === 'LiftWaitReport' || config.name === 'LiftStatusUpdate') && !data.run_id && !data.lift_id && !data.lift_name) {
+    errors.push("Either 'run_id' or 'lift_id' is required");
+  }
+
+  if ((config.name === 'LiftWaitReport' || config.name === 'LiftStatusUpdate') && !data.lift_id && !data.lift_name) {
+    errors.push("Either 'lift_id' or 'lift_name' is required");
+  }
+
+  if (config.name === 'Lift') {
+    if (data.seat_count !== undefined && data.seat_count !== null && data.seat_count !== '') {
+      const seatCount = Number(data.seat_count);
+      if (!Number.isInteger(seatCount) || seatCount < 1 || seatCount > 12) {
+        errors.push("'seat_count' must be an integer between 1 and 12");
+      }
+    }
+
+    if (data.vertical_rise_ft !== undefined && data.vertical_rise_ft !== null && data.vertical_rise_ft !== '') {
+      const verticalRise = Number(data.vertical_rise_ft);
+      if (!Number.isInteger(verticalRise) || verticalRise < 0) {
+        errors.push("'vertical_rise_ft' must be a positive integer");
+      }
+    }
+
+    if (data.ride_minutes_avg !== undefined && data.ride_minutes_avg !== null && data.ride_minutes_avg !== '') {
+      const rideMinutes = Number(data.ride_minutes_avg);
+      if (!Number.isFinite(rideMinutes) || rideMinutes <= 0 || rideMinutes > 120) {
+        errors.push("'ride_minutes_avg' must be a number between 0 and 120");
+      }
+    }
+  }
+
   return errors;
 }
 
@@ -241,6 +337,102 @@ export async function createEntity(req, res, next) {
   // Serialize tags array to JSON string (SQLite does not support primitive arrays)
   if (data.tags && Array.isArray(data.tags)) {
     data.tags = JSON.stringify(data.tags);
+  }
+
+  if (config.name === 'LiftWaitReport' || config.name === 'LiftStatusUpdate') {
+    if (data.run_id && (!data.resort_id || !data.lift_name)) {
+      const run = await prisma.run.findUnique({ where: { id: data.run_id } });
+      if (run) {
+        if (!data.resort_id) {
+          data.resort_id = run.resort_id;
+        }
+        if (!data.lift_id && run.lift_id) {
+          data.lift_id = run.lift_id;
+        }
+        if (!data.lift_name && run.lift) {
+          data.lift_name = run.lift;
+        }
+      }
+    }
+  }
+
+  if (config.name === 'ConditionNote') {
+    if (data.date_observed !== undefined && data.date_observed !== null && data.date_observed !== '') {
+      // keep date parsing below
+    }
+  }
+
+  if (config.name === 'ConditionNote' && data.run_id && !data.lift_id) {
+    const run = await prisma.run.findUnique({ where: { id: data.run_id } });
+    if (run?.lift_id) {
+      data.lift_id = run.lift_id;
+    }
+  }
+
+  if (config.name === 'ConditionNote' && !data.run_id && data.lift_id) {
+    // Compatibility path for deployments where Prisma client still expects a required run relation.
+    const linkedRun = await prisma.run.findFirst({
+      where: { lift_id: data.lift_id },
+      orderBy: { updated_date: 'desc' }
+    });
+    if (linkedRun?.id) {
+      data.run_id = linkedRun.id;
+    }
+  }
+
+  if ((config.name === 'Run' || config.name === 'LiftWaitReport' || config.name === 'LiftStatusUpdate') && data.lift_id && !data.lift_name) {
+    const lift = await prisma.lift.findUnique({ where: { id: data.lift_id } });
+    if (lift) {
+      data.lift_name = lift.name;
+      if (!data.resort_id) {
+        data.resort_id = lift.resort_id;
+      }
+    }
+  }
+
+  if (config.name === 'Run' && data.lift_id) {
+    const lift = await prisma.lift.findUnique({ where: { id: data.lift_id } });
+    if (!lift) {
+      return res.status(400).json({ statusCode: 400, error: 'Bad Request', message: 'Selected lift does not exist.' });
+    }
+    if (data.resort_id && lift.resort_id !== data.resort_id) {
+      return res.status(400).json({ statusCode: 400, error: 'Bad Request', message: 'Selected lift is not part of the selected resort.' });
+    }
+    data.lift = lift.name;
+    data.resort_id = lift.resort_id;
+  }
+
+  if (config.name === 'Lift') {
+    data.status = data.status || 'open';
+    if (data.seat_count !== undefined && data.seat_count !== null && data.seat_count !== '') {
+      data.seat_count = Number(data.seat_count);
+    }
+    if (data.vertical_rise_ft !== undefined && data.vertical_rise_ft !== null && data.vertical_rise_ft !== '') {
+      data.vertical_rise_ft = Number(data.vertical_rise_ft);
+    }
+    if (data.ride_minutes_avg !== undefined && data.ride_minutes_avg !== null && data.ride_minutes_avg !== '') {
+      data.ride_minutes_avg = Number(data.ride_minutes_avg);
+    }
+    if (data.lift_type && !data.type) {
+      data.type = data.lift_type;
+    }
+  }
+
+  if (config.name === 'LiftWaitReport') {
+    data.wait_minutes = Number(data.wait_minutes);
+    data.report_status = data.report_status || 'open';
+    if (data.conditions !== undefined && data.conditions !== null && data.conditions !== '') {
+      const normalizedConditions = normalizeConditionList(data.conditions)
+        .filter((condition) => ALLOWED_LIFT_CONDITIONS.includes(condition));
+      data.conditions = normalizedConditions.join(', ');
+    }
+    const now = new Date();
+    if (data.day_of_week === undefined) {
+      data.day_of_week = now.getUTCDay();
+    }
+    if (data.hour_of_day === undefined) {
+      data.hour_of_day = now.getUTCHours();
+    }
   }
 
   const errors = validateEntityPayload(config, data, false);
@@ -281,12 +473,120 @@ export async function createEntity(req, res, next) {
   // Attach created_by (override any provided value)
   data.created_by = req.user?.email || 'anonymous@local';
 
+  if (config.name === 'LiftWaitReport') {
+    if (data.idempotency_key) {
+      const existingByKey = await prisma.liftWaitReport.findFirst({
+        where: {
+          created_by: data.created_by,
+          idempotency_key: data.idempotency_key
+        }
+      });
+      if (existingByKey) {
+        return res.status(200).json(existingByKey);
+      }
+    }
+
+    const dedupeWindowStart = new Date(Date.now() - LIFT_REPORT_DEDUPE_WINDOW_MS);
+    const recentReport = await prisma.liftWaitReport.findFirst({
+      where: {
+        created_by: data.created_by,
+        resort_id: data.resort_id,
+        ...(data.lift_id ? { lift_id: data.lift_id } : { lift_name: data.lift_name }),
+        created_date: { gte: dedupeWindowStart }
+      },
+      orderBy: { created_date: 'desc' }
+    });
+
+    if (recentReport) {
+      return res.status(429).json({
+        statusCode: 429,
+        error: 'Too Many Requests',
+        message: 'You can report this lift again in about 5 minutes.'
+      });
+    }
+  }
+
   // Convert date strings for date_observed
   if (data.date_observed && typeof data.date_observed === 'string') {
     data.date_observed = new Date(data.date_observed);
   }
 
-  const created = await config.model.create({ data });
+  if (data.expected_reopen_at && typeof data.expected_reopen_at === 'string') {
+    data.expected_reopen_at = new Date(data.expected_reopen_at);
+  }
+
+  let created;
+
+  if (config.name === 'ConditionNote') {
+    if (!data.run_id && data.lift_id) {
+      return res.status(400).json({
+        statusCode: 400,
+        error: 'Bad Request',
+        message: 'This lift is not linked to a run yet. Link at least one run to this lift, then report conditions again.'
+      });
+    }
+
+    const conditionData = { ...data };
+    if (data.run_id) {
+      conditionData.run = { connect: { id: data.run_id } };
+    }
+    if (data.lift_id) {
+      conditionData.lift = { connect: { id: data.lift_id } };
+    }
+    if (data.created_by) {
+      conditionData.user = { connect: { email: data.created_by } };
+    }
+    delete conditionData.run_id;
+    delete conditionData.lift_id;
+    delete conditionData.created_by;
+
+    created = await prisma.conditionNote.create({ data: conditionData });
+  } else {
+    created = await config.model.create({ data });
+  }
+
+  if (config.name === 'LiftWaitReport') {
+    const statusValue = created.report_status;
+    if (['open', 'closed', 'hold'].includes(statusValue)) {
+      const verifyWindowStart = new Date(Date.now() - LIFT_STATUS_VERIFY_WINDOW_MS);
+      const matchingRecent = await prisma.liftStatusUpdate.findFirst({
+        where: {
+          resort_id: created.resort_id,
+          ...(created.lift_id ? { lift_id: created.lift_id } : { lift_name: created.lift_name }),
+          lift_name: created.lift_name,
+          status: statusValue,
+          created_date: { gte: verifyWindowStart },
+          created_by: { not: created.created_by }
+        },
+        orderBy: { created_date: 'desc' }
+      });
+
+      if (matchingRecent) {
+        await prisma.liftStatusUpdate.update({
+          where: { id: matchingRecent.id },
+          data: {
+            confirmation_count: matchingRecent.confirmation_count + 1,
+            verified: true,
+            verified_at: new Date()
+          }
+        });
+      } else {
+        await prisma.liftStatusUpdate.create({
+          data: {
+            created_by: created.created_by,
+            resort_id: created.resort_id,
+            run_id: created.run_id || null,
+            lift_id: created.lift_id || null,
+            lift_name: created.lift_name,
+            status: statusValue,
+            confirmation_count: 1,
+            verified: false
+          }
+        });
+      }
+    }
+  }
+
   res.status(201).json(created);
 }
 

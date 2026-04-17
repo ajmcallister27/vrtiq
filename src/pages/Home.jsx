@@ -36,6 +36,16 @@ export default function Home() {
     queryFn: () => api.entities.DifficultyRating.filter({ mode: ratingMode })
   });
 
+  const { data: lifts = [] } = useQuery({
+    queryKey: ['lifts'],
+    queryFn: () => api.entities.Lift.list('name')
+  });
+
+  const { data: liftReports = [] } = useQuery({
+    queryKey: ['lift-wait-reports-home'],
+    queryFn: () => api.entities.LiftWaitReport.list('-created_date')
+  });
+
   // Calculate run counts per resort
   const runCountByResort = runs.reduce((acc, run) => {
     acc[run.resort_id] = (acc[run.resort_id] || 0) + 1;
@@ -126,6 +136,45 @@ export default function Home() {
       .filter(Boolean)
   );
 
+  const fastestLiftRows = (() => {
+    if (favoriteResortIds.size === 0) {
+      return [];
+    }
+
+    const reportsByLiftKey = liftReports.reduce((acc, report) => {
+      const key = report.lift_id || `${report.resort_id}:${report.lift_name}`;
+      if (!key) {
+        return acc;
+      }
+      if (!acc[key]) {
+        acc[key] = [];
+      }
+      if (acc[key].length < 2 && report.report_status !== 'closed') {
+        acc[key].push(report);
+      }
+      return acc;
+    }, {});
+
+    return lifts
+      .filter((lift) => favoriteResortIds.has(lift.resort_id))
+      .map((lift) => {
+        const key = lift.id || `${lift.resort_id}:${lift.name}`;
+        const recentReports = reportsByLiftKey[key] || [];
+        const avgWait = recentReports.length
+          ? recentReports.reduce((sum, report) => sum + report.wait_minutes, 0) / recentReports.length
+          : null;
+        return {
+          lift,
+          avgWait,
+          reportCount: recentReports.length,
+          resortName: resorts.find((resort) => resort.id === lift.resort_id)?.name || 'Unknown Resort'
+        };
+      })
+      .filter((row) => row.avgWait !== null)
+      .sort((a, b) => a.avgWait - b.avgWait)
+      .slice(0, 5);
+  })();
+
   // Sort resorts by distance if we have location — only resorts with valid coords
   const resortsWithCoords = filteredResorts.filter(r => r.latitude && r.longitude);
   const resortsWithoutCoords = filteredResorts.filter(r => !r.latitude || !r.longitude);
@@ -176,9 +225,9 @@ export default function Home() {
   const resortMap = resorts.reduce((acc, r) => ({ ...acc, [r.id]: r }), {});
 
   return (
-    <div className="pb-6">
+    <div className="pb-8">
       {/* Hero Section */}
-      <div className="bg-gradient-to-b from-slate-50 to-white px-4 pt-6 pb-8">
+      <div className="bg-gradient-to-b from-slate-50 to-white px-4 pt-6 pb-8 lg:px-6">
         <h1 className="text-2xl font-bold text-slate-900 mb-1">
           Find Real Difficulty
         </h1>
@@ -237,7 +286,7 @@ export default function Home() {
       </div>
 
       {/* Content */}
-      <div className="px-4 space-y-8">
+      <div className="px-4 space-y-8 lg:px-6">
         {/* Nearby / Favorite Resorts */}
         {!searchQuery && (
           <>
@@ -253,7 +302,7 @@ export default function Home() {
                 ) : nearbyResorts.length === 0 ? (
                   <p className="text-sm text-slate-400 py-4 text-center">No resorts within {NEARBY_RADIUS} miles</p>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                     {nearbyResorts.slice(0, 6).map(resort => (
                       <ResortCard key={resort.id} resort={resort} runCount={runCountByResort[resort.id] || 0} distanceMi={resort.distanceMi} />
                     ))}
@@ -276,7 +325,7 @@ export default function Home() {
               ) : favoriteResorts.length === 0 ? (
                 <p className="text-sm text-slate-400 py-4 text-center">No personal resort ratings yet. Rate a run to start building your list.</p>
               ) : (
-                <div className="space-y-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {favoriteResorts.slice(0, 6).map(resort => (
                     <ResortCard key={resort.id} resort={resort} runCount={runCountByResort[resort.id] || 0} distanceMi={resort.distanceMi} />
                   ))}
@@ -296,6 +345,35 @@ export default function Home() {
                 }
               />
             )}
+
+            {favoriteResorts.length > 0 && (
+              <section>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="font-semibold text-slate-900">Fastest Lifts in Your Resorts</h2>
+                  <Link to={createPageUrl('LiftBoard')} className="text-sm text-sky-500 font-medium">See all lifts</Link>
+                </div>
+
+                {fastestLiftRows.length === 0 ? (
+                  <p className="text-sm text-slate-400 py-4 text-center">No lift wait reports yet for your resorts.</p>
+                ) : (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    {fastestLiftRows.map(({ lift, avgWait, reportCount, resortName }) => (
+                      <Link key={lift.id} to={createPageUrl(`Lift?id=${lift.id}`)} className="block p-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50">
+                        <div className="flex items-center justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">{lift.name}</p>
+                            <p className="text-xs text-slate-500">{resortName} · based on last {reportCount} report{reportCount === 1 ? '' : 's'}</p>
+                          </div>
+                          <span className="text-xs px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold">
+                            {Math.round(avgWait)} min
+                          </span>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
           </>
         )}
 
@@ -311,7 +389,7 @@ export default function Home() {
             ) : displayResorts.length === 0 ? (
               <p className="text-sm text-slate-400 text-center py-4">No resorts match "{searchQuery}"</p>
             ) : (
-              <div className="space-y-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {displayResorts.map(resort => (
                   <ResortCard key={resort.id} resort={resort} runCount={runCountByResort[resort.id] || 0} distanceMi={resort.distanceMi} />
                 ))}
@@ -327,7 +405,7 @@ export default function Home() {
               <TrendingUp className="w-4 h-4 text-sky-500" />
               <h2 className="font-semibold text-slate-900">Top Rated Runs</h2>
             </div>
-            <div className="space-y-2">
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-3">
               {recentlyRatedRuns.map(run => (
                 <RunCard
                   key={run.id}

@@ -6,6 +6,12 @@ import DifficultyBadge from './DifficultyBadge';
 import CrowdRating from './CrowdRating';
 
 export default function RunCard({ run, avgRating, ratingCount, resortName }) {
+  const liftUrl = run?.lift_id
+    ? createPageUrl(`Lift?id=${run.lift_id}`)
+    : run?.lift && run?.resort_id
+      ? createPageUrl(`Lift?resort=${run.resort_id}&name=${encodeURIComponent(run.lift)}`)
+      : null;
+
   return (
     <Link 
       to={createPageUrl(`RunDetail?id=${run.id}`)}
@@ -18,10 +24,21 @@ export default function RunCard({ run, avgRating, ratingCount, resortName }) {
           <h3 className="font-semibold text-slate-900 truncate">{run.name}</h3>
           <div className="flex items-center gap-2 mt-0.5">
             {run.lift && (
-              <span className="text-xs text-slate-400 flex items-center gap-1">
-                <Cog className="w-3 h-3" />
-                {run.lift}
-              </span>
+              liftUrl ? (
+                <Link
+                  to={liftUrl}
+                  className="text-xs text-sky-700 flex items-center gap-1 hover:underline"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Cog className="w-3 h-3" />
+                  {run.lift}
+                </Link>
+              ) : (
+                <span className="text-xs text-slate-400 flex items-center gap-1">
+                  <Cog className="w-3 h-3" />
+                  {run.lift}
+                </span>
+              )
             )}
             {resortName && (
               <span className="text-xs text-slate-400">

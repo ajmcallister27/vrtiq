@@ -1,9 +1,8 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from './utils';
-import { Mountain, Map, PlusCircle, GitCompare, ShieldCheck, LogIn } from 'lucide-react';
+import { Mountain, Map, PlusCircle, GitCompare, ShieldCheck, LogIn, Timer } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
-import { Button } from '@/components/ui/button';
 import RatingModeToggle from '@/components/RatingModeToggle';
 
 export default function Layout({ children, currentPageName }) {
@@ -13,6 +12,7 @@ export default function Layout({ children, currentPageName }) {
   const navItems = [
     { name: 'Home', icon: Mountain, page: 'Home' },
     { name: 'Resorts', icon: Map, page: 'Resorts' },
+    { name: 'Lifts', icon: Timer, page: 'LiftBoard' },
     { name: 'Add', icon: PlusCircle, page: 'AddData' },
     { name: 'Compare', icon: GitCompare, page: 'Compare' },
   ];
@@ -46,7 +46,7 @@ export default function Layout({ children, currentPageName }) {
       
       {/* Header */}
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-slate-100">
-        <div className={`mx-auto w-full px-4 py-2.5 ${isAdminPage ? 'max-w-[1400px] lg:px-8' : 'max-w-lg'}`}>
+        <div className={`mx-auto w-full px-4 py-2.5 ${isAdminPage ? 'max-w-[1400px] lg:px-8' : 'max-w-6xl lg:px-8'}`}>
           <div className="flex items-start justify-between gap-3 sm:items-center">
             <Link to={createPageUrl('Home')} className="flex items-center gap-2.5 shrink-0 min-w-0">
               <div className="w-8 h-8 bg-slate-900 rounded-xl flex items-center justify-center shadow-sm">
@@ -73,24 +73,41 @@ export default function Layout({ children, currentPageName }) {
               )}
               {!user && (
                 <Link to={createPageUrl('Login')}>
-                  <Button variant="outline" size="sm" className="hidden sm:inline-flex rounded-full">
+                  <button type="button" className="hidden sm:inline-flex rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
                     <LogIn className="w-4 h-4 mr-1" />
                     Login
-                  </Button>
+                  </button>
                 </Link>
               )}
             </div>
           </div>
+
+          {!isAdminPage && (
+            <div className="hidden lg:flex items-center gap-2 pt-2">
+              {navItems.filter((item) => item.page !== 'Admin').map((item) => {
+                const isActive = currentPageName === item.page;
+                return (
+                  <Link
+                    key={`desktop-${item.page}`}
+                    to={createPageUrl(item.page)}
+                    className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${isActive ? 'bg-sky-100 text-sky-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+                  >
+                    {item.name}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </div>
       </header>
 
       {/* Main Content */}
-      <main className={`flex-1 w-full ${isAdminPage ? 'mx-auto max-w-[1400px]' : 'max-w-lg mx-auto'}`}>
+      <main className={`flex-1 w-full ${isAdminPage ? 'mx-auto max-w-[1400px]' : 'mx-auto max-w-6xl'}`}>
         {children}
       </main>
 
       {/* Bottom Navigation */}
-      <nav className={`sticky bottom-0 bg-white border-t border-slate-100 safe-area-inset-bottom ${isAdminPage ? 'lg:hidden' : ''}`}>
+      <nav className={`sticky bottom-0 bg-white border-t border-slate-100 safe-area-inset-bottom lg:hidden ${isAdminPage ? 'lg:hidden' : ''}`}>
         <div className={`mx-auto px-2 ${isAdminPage ? 'w-full max-w-[1400px] lg:px-8' : 'max-w-lg'}`}>
           <div className="flex justify-around py-2">
             {navItems.map((item) => {

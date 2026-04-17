@@ -20,6 +20,8 @@ model User {
   ratings      DifficultyRating[]  @relation("ratingBy")
   notes        ConditionNote[]     @relation("noteBy")
   comparisons  CrossResortComparison[] @relation("comparisonBy")
+  lift_wait_reports LiftWaitReport[] @relation("liftWaitReportBy")
+  lift_status_updates LiftStatusUpdate[] @relation("liftStatusBy")
 
   edit_requests PendingEditRequest[] @relation("editRequestBy")
 }
@@ -41,8 +43,35 @@ model Resort {
   peak_elevation Int?
 
   runs Run[]
+  lifts Lift[]
+  lift_wait_reports LiftWaitReport[]
+  lift_status_updates LiftStatusUpdate[]
 
   pending_edit_requests PendingEditRequest[]
+}
+
+model Lift {
+  id           String   @id @default(uuid())
+  created_date DateTime @default(now())
+  updated_date DateTime @updatedAt
+  created_by   String
+  resort_id    String
+  name         String
+  status       String   @default("open")
+  type         String?
+  lift_type    String?
+  seat_count   Int?
+  vertical_rise_ft Int?
+  ride_minutes_avg Float?
+
+  resort Resort @relation(fields: [resort_id], references: [id], onDelete: Cascade)
+  runs   Run[]
+  lift_wait_reports LiftWaitReport[]
+  lift_status_updates LiftStatusUpdate[]
+  condition_notes ConditionNote[]
+
+  @@index([resort_id, name])
+  @@unique([resort_id, name])
 }
 
 model Run {
@@ -54,6 +83,7 @@ model Run {
   resort_id         String
   official_difficulty String
   lift              String?
+  lift_id           String?
   length_ft         Int?
   vertical_drop     Int?
   average_pitch     Float?
@@ -62,8 +92,11 @@ model Run {
   description       String?
 
   resort            Resort  @relation(fields: [resort_id], references: [id], onDelete: Cascade)
+  lift_entity       Lift?   @relation(fields: [lift_id], references: [id], onDelete: SetNull)
   ratings           DifficultyRating[]
   notes             ConditionNote[]
+  lift_wait_reports LiftWaitReport[]
+  lift_status_updates LiftStatusUpdate[]
   comparisonsAsRun1 CrossResortComparison[] @relation("comparisonRun1")
   comparisonsAsRun2 CrossResortComparison[] @relation("comparisonRun2")
 
@@ -91,13 +124,18 @@ model ConditionNote {
   created_date  DateTime @default(now())
   updated_date  DateTime @updatedAt
   created_by    String
-  run_id        String
+  run_id        String?
+  lift_id       String?
   note          String
   tags          String?
   date_observed DateTime?
 
-  run  Run @relation(fields: [run_id], references: [id], onDelete: Cascade)
+  run  Run? @relation(fields: [run_id], references: [id], onDelete: SetNull)
+  lift Lift? @relation(fields: [lift_id], references: [id], onDelete: SetNull)
   user User? @relation("noteBy", fields: [created_by], references: [email], onDelete: Cascade)
+
+  @@index([run_id, created_date])
+  @@index([lift_id, created_date])
 }
 
 model CrossResortComparison {
@@ -113,6 +151,62 @@ model CrossResortComparison {
   run1 Run @relation("comparisonRun1", fields: [run1_id], references: [id], onDelete: Cascade)
   run2 Run @relation("comparisonRun2", fields: [run2_id], references: [id], onDelete: Cascade)
   user User? @relation("comparisonBy", fields: [created_by], references: [email], onDelete: Cascade)
+}
+
+model LiftWaitReport {
+  id                   String   @id @default(uuid())
+  created_date         DateTime @default(now())
+  updated_date         DateTime @updatedAt
+  created_by           String
+  resort_id            String
+  run_id               String?
+  lift_id              String?
+  lift_name            String
+  wait_minutes         Int
+  report_status        String   @default("open")
+  conditions           String?
+  powder_type          String?
+  note                 String?
+  day_of_week          Int
+  hour_of_day          Int
+  idempotency_key      String?
+  forecast_snowfall_in Float?
+
+  resort Resort @relation(fields: [resort_id], references: [id], onDelete: Cascade)
+  run    Run?   @relation(fields: [run_id], references: [id], onDelete: SetNull)
+  lift   Lift?  @relation(fields: [lift_id], references: [id], onDelete: SetNull)
+  user   User?  @relation("liftWaitReportBy", fields: [created_by], references: [email], onDelete: Cascade)
+
+  @@index([run_id, created_date])
+  @@index([resort_id, lift_name, created_date])
+  @@index([created_by, run_id, created_date])
+  @@unique([created_by, idempotency_key])
+}
+
+model LiftStatusUpdate {
+  id                 String   @id @default(uuid())
+  created_date       DateTime @default(now())
+  updated_date       DateTime @updatedAt
+  created_by         String
+  resort_id          String
+  run_id             String?
+  lift_id            String?
+  lift_name          String
+  status             String
+  reason             String?
+  expected_reopen_at DateTime?
+  confirmation_count Int      @default(1)
+  verified           Boolean  @default(false)
+  verified_at        DateTime?
+
+  resort Resort @relation(fields: [resort_id], references: [id], onDelete: Cascade)
+  run    Run?   @relation(fields: [run_id], references: [id], onDelete: SetNull)
+  lift   Lift?  @relation(fields: [lift_id], references: [id], onDelete: SetNull)
+  user   User?  @relation("liftStatusBy", fields: [created_by], references: [email], onDelete: Cascade)
+
+  @@index([run_id, created_date])
+  @@index([resort_id, lift_name, created_date])
+  @@index([resort_id, lift_name, status, created_date])
 }
 
 model PendingEditRequest {

@@ -138,10 +138,13 @@ export const api = {
   },
   entities: {
     Resort: makeEntityMethods('Resort'),
+    Lift: makeEntityMethods('Lift'),
     Run: makeEntityMethods('Run'),
     DifficultyRating: makeEntityMethods('DifficultyRating'),
     ConditionNote: makeEntityMethods('ConditionNote'),
     CrossResortComparison: makeEntityMethods('CrossResortComparison'),
+    LiftWaitReport: makeEntityMethods('LiftWaitReport'),
+    LiftStatusUpdate: makeEntityMethods('LiftStatusUpdate'),
     User: makeEntityMethods('User')
   },
   integrations: {
