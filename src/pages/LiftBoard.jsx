@@ -4,10 +4,13 @@ import { useQuery } from '@tanstack/react-query';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { Clock3, Loader2, Mountain, Navigation, Search, X } from 'lucide-react';
 import { api } from '@/api/apiClient';
+import { useAuth } from '@/lib/AuthContext';
 import { createPageUrl } from '../utils';
 import EmptyState from '../components/EmptyState';
 import { estimateLiftWaitMinutes } from '@/lib/liftInsights';
 import { getResortTimeZone } from '@/lib/resortTimeZone';
+import { useRatingMode } from '@/lib/RatingModeContext';
+import { getFavoriteResortIdSet } from '@/lib/userResorts';
 
 function waitPillClass(minutes, status) {
   if (status === 'closed') {
@@ -31,14 +34,12 @@ function waitPillClass(minutes, status) {
 export default function LiftBoard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [resortSearch, setResortSearch] = useState('');
+  const { user } = useAuth();
+  const { ratingMode } = useRatingMode();
+  const [hasUserSelection, setHasUserSelection] = useState(false);
   const [selectedResorts, setSelectedResorts] = useState(() => {
     const raw = searchParams.get('resorts') || searchParams.get('resort') || '';
     return raw.split(',').map((id) => id.trim()).filter(Boolean);
-  });
-
-  const { data: currentUser } = useQuery({
-    queryKey: ['me'],
-    queryFn: () => api.auth.me()
   });
 
   const { data: resorts = [], isLoading: resortsLoading } = useQuery({
@@ -52,26 +53,24 @@ export default function LiftBoard() {
   });
 
   const { data: ratings = [] } = useQuery({
-    queryKey: ['lift-board-ratings'],
-    queryFn: () => api.entities.DifficultyRating.list('-created_date', 5000)
+    queryKey: ['lift-board-ratings', ratingMode],
+    queryFn: () => api.entities.DifficultyRating.filter({ mode: ratingMode }, '-created_date', 5000)
   });
 
-  const visitedResortIds = useMemo(() => {
-    if (!currentUser?.email) return [];
-
-    return Array.from(new Set([
-      ...ratings
-        .filter((rating) => rating.created_by === currentUser.email)
-        .map((rating) => allRuns.find((run) => run.id === rating.run_id)?.resort_id)
-        .filter(Boolean),
-    ]));
-  }, [allRuns, currentUser?.email, ratings]);
+  const visitedResortIds = useMemo(
+    () => Array.from(getFavoriteResortIdSet({ user, ratings, runs: allRuns })),
+    [allRuns, ratings, user]
+  );
 
   useEffect(() => {
     const validSelected = selectedResorts.filter((id) => resorts.some((resort) => resort.id === id));
-    const fallback = validSelected.length > 0
-      ? validSelected
-      : (visitedResortIds.length > 0 ? visitedResortIds : (resorts[0]?.id ? [resorts[0].id] : []));
+    const defaultFavorites = visitedResortIds.length > 0
+      ? visitedResortIds
+      : (resorts[0]?.id ? [resorts[0].id] : []);
+
+    const fallback = hasUserSelection
+      ? (validSelected.length > 0 ? validSelected : defaultFavorites)
+      : defaultFavorites;
 
     const next = fallback.join(',');
     const current = searchParams.get('resorts') || searchParams.get('resort') || '';
@@ -83,7 +82,7 @@ export default function LiftBoard() {
     if (JSON.stringify(fallback) !== JSON.stringify(selectedResorts)) {
       setSelectedResorts(fallback);
     }
-  }, [resorts, searchParams, selectedResorts, setSearchParams, visitedResortIds]);
+  }, [hasUserSelection, resorts, searchParams, selectedResorts, setSearchParams, visitedResortIds]);
 
   const activeResortIds = selectedResorts.length > 0 ? selectedResorts : (visitedResortIds.length > 0 ? visitedResortIds : (resorts[0]?.id ? [resorts[0].id] : []));
 
@@ -133,6 +132,7 @@ export default function LiftBoard() {
   }, [resortSearch, resorts, selectedResorts]);
 
   const toggleResortSelection = (resortId) => {
+    setHasUserSelection(true);
     setSelectedResorts((prev) => {
       if (prev.includes(resortId)) {
         return prev.filter((id) => id !== resortId);

@@ -13,6 +13,7 @@ import EmptyState from '../components/EmptyState';
 import NearbyResortMap from '../components/NearbyResortMap';
 import { useRatingMode } from '@/lib/RatingModeContext';
 import { getRatingModeLabel } from '@/lib/ratingMode';
+import { getFavoriteResortIdSet } from '@/lib/userResorts';
 
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -110,31 +111,8 @@ export default function Home() {
     }
   };
 
-  // Use the authenticated user's unique auth identity to scope ratings to this user only.
-  const currentUserId = user?.id;
-  const currentUserEmail = user?.email;
-  const currentUserRatings = ratings.filter((rating) => {
-    if (!currentUserId && !currentUserEmail) return false;
-
-    return (
-      (currentUserEmail && rating.created_by === currentUserEmail) ||
-      (currentUserId && (
-        rating.created_by === currentUserId ||
-        rating.created_by_id === currentUserId ||
-        rating.user_id === currentUserId
-      ))
-    );
-  });
-
   // Resorts where the authenticated user has rated a run
-  const favoriteResortIds = new Set(
-    currentUserRatings
-      .map(r => {
-        const run = runs.find(run => run.id === r.run_id);
-        return run?.resort_id;
-      })
-      .filter(Boolean)
-  );
+  const favoriteResortIds = getFavoriteResortIdSet({ user, ratings, runs });
 
   const fastestLiftRows = (() => {
     if (favoriteResortIds.size === 0) {

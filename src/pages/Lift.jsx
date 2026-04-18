@@ -240,11 +240,17 @@ export default function Lift() {
       refreshLiftQueries();
       setCooldownUntil(Date.now() + REPORT_COOLDOWN_MS);
       setNowTs(Date.now());
-      setUndoReport({ id: created.id, expiresAt: Date.now() + 10000 });
+      setUndoReport({
+        id: created.id,
+        waitMinutes,
+        reportStatus,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 15000
+      });
       const createdId = created.id;
       setTimeout(() => {
         setUndoReport((current) => (current?.id === createdId ? null : current));
-      }, 10000);
+      }, 15000);
     } catch (error) {
       if (error?.status === 429) {
         setCooldownUntil(Date.now() + REPORT_COOLDOWN_MS);
@@ -263,9 +269,35 @@ export default function Lift() {
 
     setIsUndoing(true);
     try {
-      await api.entities.LiftWaitReport.delete(undoReport.id);
+      try {
+        await api.entities.LiftWaitReport.delete(undoReport.id);
+      } catch {
+        // Fallback for cases where the returned ID is stale or the record was normalized server-side.
+        const recentMine = await api.entities.LiftWaitReport.filter({
+          lift_id: lift.id,
+          created_by: currentUser?.email
+        }, '-created_date', 5);
+
+        const fallbackTarget = recentMine.find((report) => {
+          const createdTs = new Date(report.created_date).getTime();
+          const withinUndoWindow = Number.isFinite(createdTs) && Math.abs(createdTs - undoReport.createdAt) < 2 * 60 * 1000;
+          const sameWait = Number(report.wait_minutes) === Number(undoReport.waitMinutes);
+          const sameStatus = String(report.report_status || '') === String(undoReport.reportStatus || '');
+          return withinUndoWindow && sameWait && sameStatus;
+        });
+
+        if (!fallbackTarget?.id) {
+          throw new Error('Unable to find the report to undo.');
+        }
+
+        await api.entities.LiftWaitReport.delete(fallbackTarget.id);
+      }
+
       refreshLiftQueries();
       setUndoReport(null);
+      setCooldownUntil(null);
+      setNowTs(Date.now());
+      setReportError('');
     } catch (error) {
       setReportError(error?.message || 'Unable to undo right now.');
     } finally {
