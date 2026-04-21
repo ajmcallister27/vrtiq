@@ -11,12 +11,11 @@
     "migrate": "npx prisma migrate dev --name init",
     "migrate:deploy": "npx prisma migrate deploy",
     "generate": "npx prisma generate",
-    "seed": "node prisma/seed.js",
-    "deploy:check": "bash ./deploy/predeploy-check.sh",
-    "backup:db": "bash ./deploy/backup-db.sh",
-    "prune:storage": "bash ./deploy/prune-storage.sh"
+    "seed": "node prisma/seed.js"
   },
   "dependencies": {
+    "@libsql/client": "^0.8.1",
+    "@prisma/adapter-libsql": "^5.13.0",
     "@prisma/client": "^5.13.0",
     "bcrypt": "^5.1.0",
     "cors": "^2.8.5",

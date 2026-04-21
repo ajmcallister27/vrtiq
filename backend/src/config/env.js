@@ -10,22 +10,26 @@ function normalizeSqliteDatabaseUrl(rawDatabaseUrl) {
     return 'file:./dev.db';
   }
 
-  if (input.startsWith('file:')) {
-    const remainder = input.slice(5);
-    if (remainder.startsWith('/')) {
-      return `file:${remainder}`;
-    }
-    if (remainder.startsWith('./') || remainder.startsWith('../')) {
-      return input;
-    }
-    return `file:./${remainder}`;
-  }
-
   if (path.isAbsolute(input)) {
     return `file:${input.replace(/\\/g, '/')}`;
   }
 
-  return `file:./${input}`;
+  if (input.includes('://')) {
+    return input;
+  }
+
+  if (!input.startsWith('file:')) {
+    return `file:./${input}`;
+  }
+
+  const remainder = input.slice(5);
+  if (remainder.startsWith('/')) {
+    return `file:${remainder}`;
+  }
+  if (remainder.startsWith('./') || remainder.startsWith('../')) {
+    return input;
+  }
+  return `file:./${remainder}`;
 }
 
 function parseOriginAllowList(rawOrigins) {
@@ -39,6 +43,8 @@ const validatedEnv = cleanEnv(process.env, {
   NODE_ENV: str({ choices: ['development', 'test', 'production'], default: 'development' }),
   PORT: port({ default: 3000 }),
   DATABASE_URL: str({ default: 'file:./dev.db' }),
+  TURSO_DATABASE_URL: str({ default: '' }),
+  TURSO_AUTH_TOKEN: str({ default: '' }),
   JWT_SECRET: str({ default: '' }),
   JWT_EXPIRES_IN: str({ default: '7d' }),
   CORS_ALLOWED_ORIGINS: str({ default: '' }),
@@ -64,9 +70,19 @@ const corsAllowedOrigins = parsedCorsOrigins.length > 0
 
 const jwtSecret = validatedEnv.JWT_SECRET || (isProduction ? '' : 'dev-insecure-jwt-secret-change-me');
 const normalizedDatabaseUrl = normalizeSqliteDatabaseUrl(validatedEnv.DATABASE_URL);
+const hasTursoUrl = Boolean(validatedEnv.TURSO_DATABASE_URL.trim());
+const hasTursoToken = Boolean(validatedEnv.TURSO_AUTH_TOKEN.trim());
 
 if (isProduction && !validatedEnv.JWT_SECRET) {
   throw new Error('JWT_SECRET must be set when NODE_ENV=production');
+}
+
+if (hasTursoUrl !== hasTursoToken) {
+  throw new Error('Set both TURSO_DATABASE_URL and TURSO_AUTH_TOKEN together.');
+}
+
+if (isProduction && !hasTursoUrl) {
+  console.warn('TURSO_DATABASE_URL is not set. Backend will use local SQLite DATABASE_URL instead.');
 }
 
 if (!isProduction && !validatedEnv.JWT_SECRET) {
@@ -88,6 +104,8 @@ export const appConfig = {
   isProduction,
   port: validatedEnv.PORT,
   databaseUrl: normalizedDatabaseUrl,
+  tursoDatabaseUrl: validatedEnv.TURSO_DATABASE_URL,
+  tursoAuthToken: validatedEnv.TURSO_AUTH_TOKEN,
   jwtSecret,
   jwtExpiresIn: validatedEnv.JWT_EXPIRES_IN,
   corsAllowedOrigins,

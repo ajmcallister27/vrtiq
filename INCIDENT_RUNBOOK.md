@@ -1,6 +1,6 @@
 # vrtIQ Incident Recovery Runbook
 
-This runbook covers backend incident triage, rollback, and SQLite backup/restore on Oracle Always Free.
+This runbook covers backend incident triage and recovery for Render + Turso production.
 
 ## 1) Severity levels
 
@@ -10,154 +10,66 @@ This runbook covers backend incident triage, rollback, and SQLite backup/restore
 
 ## 2) Immediate triage checklist
 
-1. Confirm health endpoints:
+1. Confirm backend health endpoints:
 ```bash
-curl -f https://api.vrtiq.com/health/live
-curl -f https://api.vrtiq.com/health/ready
+curl -f https://<render-service>.onrender.com/health/live
+curl -f https://<render-service>.onrender.com/health/ready
 ```
-2. Check service status:
-```bash
-sudo systemctl status vrtiq-backend --no-pager
-```
-3. Check recent logs:
-```bash
-sudo journalctl -u vrtiq-backend -n 200 --no-pager
-```
-4. Confirm latest deployment run:
-- GitHub Actions workflow `Deploy Backend to Oracle`
-5. Run guardrail and storage checks:
-```bash
-cd /srv/vrtiq/app/backend
-bash ./deploy/predeploy-check.sh
-```
+2. Check latest Render deploy logs and runtime logs.
+3. Confirm latest GitHub Pages deployment run completed.
+4. Verify Turso status and token validity.
 
 ## 3) Common incident playbooks
 
-### A) Service not starting
+### A) Backend not starting on Render
 
-1. Validate env file exists and permissions are strict:
-```bash
-sudo ls -l /etc/vrtiq/backend.env
-```
-2. Validate required production values:
-- NODE_ENV=production
-- JWT_SECRET is set
-- CORS_ALLOWED_ORIGINS is set
-- DATABASE_URL points to valid sqlite file path
-3. Retry service:
-```bash
-sudo systemctl daemon-reload
-sudo systemctl restart vrtiq-backend
-sudo systemctl status vrtiq-backend --no-pager
-```
+1. Validate required env vars in Render service:
+- `NODE_ENV=production`
+- `JWT_SECRET`
+- `CORS_ALLOWED_ORIGINS`
+- `TURSO_DATABASE_URL`
+- `TURSO_AUTH_TOKEN`
+2. Check Render build logs for dependency/install failures.
+3. Check runtime logs for startup validation errors.
+4. Roll back to last healthy deploy in Render if needed.
 
 ### B) Readiness failing, liveness passing
 
 Likely DB connectivity issue.
 
-1. Check DB file path and permissions:
-```bash
-sudo ls -l /var/lib/vrtiq/db/prod.db
-```
-2. Ensure runtime user can read/write DB directory:
-```bash
-sudo chown -R vrtiq:vrtiq /var/lib/vrtiq/db
-```
-3. Re-run migrations:
-```bash
-cd /srv/vrtiq/app/backend
-npm run migrate:deploy
-```
-4. Restart service and retest readiness.
+1. Verify `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` are present and correct.
+2. Confirm Turso database is reachable.
+3. Re-apply latest migration SQL if schema drift is suspected.
 
 ### C) CORS rejections after frontend change
 
-1. Update `/etc/vrtiq/backend.env` `CORS_ALLOWED_ORIGINS` with exact frontend origin list.
-2. Restart:
-```bash
-sudo systemctl restart vrtiq-backend
-```
-3. Verify with browser/network logs and endpoint calls.
+1. Update Render `CORS_ALLOWED_ORIGINS` with exact frontend origin list.
+2. Redeploy backend.
+3. Verify with browser network logs and endpoint calls.
 
-### D) Failed production deploy from GitHub Actions
+### D) Failed frontend release
 
-1. SSH into server and run deploy script manually:
-```bash
-cd /srv/vrtiq/app
-bash ./backend/deploy/deploy.sh
-```
-2. If manual deploy succeeds, investigate missing/incorrect GitHub secrets.
-3. If manual deploy fails, follow rollback steps below.
+1. Check GitHub Actions workflow `Deploy static content to Pages`.
+2. Verify repository secret `VITE_API_BASE_URL` is set correctly.
+3. Trigger a manual workflow dispatch after fixing secrets.
 
 ## 4) Rollback procedure
 
-1. Find last known good commit:
-```bash
-cd /srv/vrtiq/app
-git reflog -n 10
-```
-2. Reset and redeploy to that commit:
-```bash
-git checkout master
-git reset --hard HEAD@{1}
-cd backend
-npm ci
-npm run generate
-npm run migrate:deploy
-sudo systemctl restart vrtiq-backend
-curl -f http://127.0.0.1:3000/health/ready
-```
-3. Push revert commit to master to realign remote branch with running state.
+1. Backend rollback:
+- In Render dashboard, redeploy previous successful version.
+2. Frontend rollback:
+- Re-run GitHub Pages deploy on a known good commit.
+3. Database rollback:
+- Apply a compensating SQL migration using Turso CLI.
 
-## 5) Backup and restore
+## 5) Data recovery strategy
 
-### Create on-demand backup
+- Turso provides backups/point-in-time capabilities based on your plan.
+- For destructive incidents, restore in Turso, then validate API readiness before reopening traffic.
 
-```bash
-cd /srv/vrtiq/app/backend
-bash ./deploy/backup-db.sh
-ls -lh /var/lib/vrtiq/backups
-```
-
-### Restore from backup
-
-1. Stop app:
-```bash
-sudo systemctl stop vrtiq-backend
-```
-2. Restore chosen backup:
-```bash
-LATEST_BACKUP="$(ls -1t /var/lib/vrtiq/backups/prod-*.db.gz | head -n 1)"
-sudo rm -f /var/lib/vrtiq/db/prod.db
-sudo gunzip -c "${LATEST_BACKUP}" | sudo tee /var/lib/vrtiq/db/prod.db > /dev/null
-sudo chown vrtiq:vrtiq /var/lib/vrtiq/db/prod.db
-sudo chmod 600 /var/lib/vrtiq/db/prod.db
-```
-3. Start app and verify:
-```bash
-sudo systemctl start vrtiq-backend
-curl -f http://127.0.0.1:3000/health/ready
-```
-
-## 6) Storage and quota breach response
-
-If any threshold crosses 85%:
-
-1. Run prune job:
-```bash
-cd /srv/vrtiq/app/backend
-bash ./deploy/prune-storage.sh
-```
-2. Re-run capacity check:
-```bash
-bash ./deploy/predeploy-check.sh
-```
-3. Remove stale artifacts under `/srv/vrtiq/releases` if required.
-4. Confirm no autoscaling or extra instances were introduced.
-
-## 7) Post-incident actions
+## 6) Post-incident actions
 
 1. Create timeline of events and root cause.
 2. Capture affected endpoints and user impact.
 3. Add corrective action with owner and due date.
-4. Update deployment guide or scripts to prevent recurrence.
+4. Update deployment docs and tests to prevent recurrence.

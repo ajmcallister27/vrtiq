@@ -29,7 +29,8 @@ Important environment behavior:
 - In `production`, startup fails if `JWT_SECRET` is missing.
 - In `production`, startup fails if `CORS_ALLOWED_ORIGINS` is empty.
 - `CORS_ALLOWED_ORIGINS` must be a comma-separated explicit allowlist.
-- `DATABASE_URL` supports relative SQLite paths (for local dev) and absolute SQLite paths (for production).
+- `DATABASE_URL` is used for local Prisma migration generation.
+- Set both `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` to use Turso at runtime.
 
 ### 3) Initialize the database
 
@@ -40,6 +41,10 @@ npm run seed
 ```
 
 This creates an SQLite database at `dev.db` and seeds an admin user.
+
+For Turso production migrations:
+1. Generate SQL locally with `npm run migrate`.
+2. Apply the generated SQL to Turso with Turso CLI (`turso db shell <db-name> < ./prisma/migrations/<migration>/migration.sql`).
 
 ### 4) Start the server
 
@@ -78,16 +83,7 @@ Alternatively, you can add a hosts entry to point `vrtiq.base44.app` to `127.0.0
 - The backend enforces JWT auth for creating/updating entities and integration endpoints.
 - A default admin user is created by `npm run seed` (email/password in `.env`).
 
-## Production Operations
+## Production Deployment
 
-Deployment and guardrail scripts:
-
-```bash
-npm run deploy:check      # capacity/storage guardrails
-npm run migrate:deploy    # production Prisma migrations
-npm run backup:db         # SQLite backup with retention pruning
-npm run prune:storage     # backups/logs/artifacts pruning
-```
-
-Systemd units and timers are in `deploy/systemd/`.
-See the repository root deployment guide: `../PRODUCTION_ORACLE_ALWAYS_FREE.md`.
+Use Render for backend hosting and Turso for the database.
+See the repository root deployment guide: `../PRODUCTION_RENDER_TURSO.md`.
