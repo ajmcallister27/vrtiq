@@ -1,23 +1,18 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { createPageUrl } from '../utils';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { useQuery } from '@tanstack/react-query';
 import { 
   MapPin, Plus, Loader2, ArrowDown, ArrowUp,
-  ExternalLink, Mountain, Map as MapIcon, Pencil
+  ExternalLink, Mountain, Map as MapIcon, Pencil, Clock3
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import RunCard from '../components/RunCard';
 import DifficultyBadge from '../components/DifficultyBadge';
 import EmptyState from '../components/EmptyState';
+import { useRatingMode } from '@/lib/RatingModeContext';
 
 const difficultyOrder = { green: 1, blue: 2, black: 3, double_black: 4, terrain_park: 5 };
 
@@ -29,23 +24,42 @@ export default function Resort() {
   const [sortBy, setSortBy] = useState('official'); // official, crowd, name
   const [filterDifficulty, setFilterDifficulty] = useState('all');
   const [sortOrder, setSortOrder] = useState('asc');
+  const { ratingMode } = useRatingMode();
 
   const { data: resort, isLoading: resortLoading } = useQuery({
     queryKey: ['resort', resortId],
-    queryFn: () => base44.entities.Resort.filter({ id: resortId }),
+    queryFn: () => api.entities.Resort.filter({ id: resortId }),
     enabled: !!resortId,
     select: (data) => data[0]
   });
 
   const { data: runs = [], isLoading: runsLoading } = useQuery({
     queryKey: ['runs', resortId],
-    queryFn: () => base44.entities.Run.filter({ resort_id: resortId }),
+    queryFn: () => api.entities.Run.filter({ resort_id: resortId }),
     enabled: !!resortId
   });
 
   const { data: ratings = [] } = useQuery({
-    queryKey: ['ratings'],
-    queryFn: () => base44.entities.DifficultyRating.list()
+    queryKey: ['ratings', ratingMode],
+    queryFn: () => api.entities.DifficultyRating.filter({ mode: ratingMode })
+  });
+
+  const { data: lifts = [] } = useQuery({
+    queryKey: ['lifts', resortId],
+    queryFn: () => api.entities.Lift.filter({ resort_id: resortId }, 'name'),
+    enabled: !!resortId
+  });
+
+  const { data: liftReports = [] } = useQuery({
+    queryKey: ['lift-reports', resortId],
+    queryFn: () => api.entities.LiftWaitReport.filter({ resort_id: resortId }, '-created_date', 200),
+    enabled: !!resortId
+  });
+
+  const { data: liftStatuses = [] } = useQuery({
+    queryKey: ['lift-statuses', resortId],
+    queryFn: () => api.entities.LiftStatusUpdate.filter({ resort_id: resortId }, '-created_date', 100),
+    enabled: !!resortId
   });
 
   // Calculate average ratings per run
@@ -80,6 +94,47 @@ export default function Resort() {
     acc[run.official_difficulty] = (acc[run.official_difficulty] || 0) + 1;
     return acc;
   }, {});
+
+  const latestReportByLift = liftReports.reduce((acc, report) => {
+    const key = report.lift_id || report.lift_name;
+    if (!key) {
+      return acc;
+    }
+    if (!acc[key]) {
+      acc[key] = [];
+    }
+    if (acc[key].length < 2 && report.report_status !== 'closed') {
+      acc[key].push(report);
+    }
+    return acc;
+  }, {});
+
+  const latestStatusByLift = liftStatuses.reduce((acc, status) => {
+    const key = status.lift_id || status.lift_name;
+    if (!key || acc[key]) {
+      return acc;
+    }
+    acc[key] = status;
+    return acc;
+  }, {});
+
+  const liftBoardRows = lifts.map((lift) => {
+    const recentReports = latestReportByLift[lift.id] || latestReportByLift[lift.name] || [];
+    const report = recentReports[0] || null;
+    const status = latestStatusByLift[lift.id] || latestStatusByLift[lift.name] || null;
+    const effectiveStatus = status?.status || report?.report_status || lift.status || 'open';
+    const avgWait = recentReports.length
+      ? Math.round(recentReports.reduce((sum, item) => sum + item.wait_minutes, 0) / recentReports.length)
+      : null;
+
+    return {
+      id: lift.id,
+      name: lift.name,
+      waitMinutes: avgWait,
+      status: effectiveStatus,
+      verificationLabel: status ? (status.verified ? 'confirmed' : 'awaiting one more report') : 'no confirmations yet'
+    };
+  });
 
   if (resortLoading) {
     return (
@@ -132,7 +187,7 @@ export default function Resort() {
               </a>
             )}
             <Link
-              to={createPageUrl(`SuggestEdit?type=resort&name=${encodeURIComponent(resort.name)}&back=${encodeURIComponent(location.pathname + location.search)}`)}
+              to={createPageUrl(`SuggestEdit?type=resort&id=${encodeURIComponent(resort.id)}&name=${encodeURIComponent(resort.name)}&back=${encodeURIComponent(location.pathname + location.search)}`)}
               className="p-2 text-slate-400 hover:text-slate-600 inline-flex items-center gap-1 text-xs"
             >
               <Pencil className="w-4 h-4" />
@@ -203,6 +258,9 @@ export default function Resort() {
 
       {/* Runs List */}
       <div className="px-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-slate-900">Runs ({filteredRuns.length})</h2>
+        </div>
         {runsLoading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
@@ -240,6 +298,46 @@ export default function Resort() {
           </div>
         )}
       </div>
+
+      {lifts.length > 0 && (
+        <div className="px-4 pt-5 pb-2">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-slate-900">Lifts ({lifts.length})</h2>
+            <Link to={createPageUrl(`LiftBoard?resort=${resortId}`)}>
+              <Button variant="outline" size="sm" className="rounded-lg">Open Full Board</Button>
+            </Link>
+          </div>
+
+          <div className="space-y-2">
+            {liftBoardRows.map((lift) => (
+              <Link key={lift.id} to={createPageUrl(`Lift?id=${lift.id}`)} className="block p-3 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 transition-colors">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-slate-900">{lift.name}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {lift.status} ({lift.verificationLabel})
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <div className={`text-xs px-2 py-1 rounded-full font-semibold inline-flex items-center gap-1 ${
+                      lift.status === 'closed'
+                        ? 'bg-rose-100 text-rose-700'
+                        : (lift.waitMinutes ?? 0) <= 5
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : (lift.waitMinutes ?? 0) <= 15
+                            ? 'bg-sky-100 text-sky-700'
+                            : 'bg-amber-100 text-amber-700'
+                    }`}>
+                      <Clock3 className="w-3 h-3" />
+                      {lift.status === 'closed' ? 'Closed' : lift.waitMinutes !== undefined ? `${lift.waitMinutes} min` : 'No data'}
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Trail Map */}
       {resort.map_image_url && (

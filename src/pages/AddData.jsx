@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { createPageUrl } from '../utils';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Mountain, Map, Loader2, Check, ChevronRight, 
-  Plus, ArrowLeft
+  Plus
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -49,6 +49,7 @@ export default function AddData() {
     resort_id: preselectedResortId || '',
     official_difficulty: 'blue',
     lift: '',
+    lift_id: '',
     length_ft: '',
     vertical_drop: '',
     average_pitch: '',
@@ -56,15 +57,29 @@ export default function AddData() {
     groomed: true,
     description: ''
   });
+  const [liftForm, setLiftForm] = useState({
+    resort_id: preselectedResortId || '',
+    name: '',
+    lift_type: 'chairlift',
+    seat_count: '',
+    vertical_rise_ft: '',
+    ride_minutes_avg: ''
+  });
 
   const { data: resorts = [] } = useQuery({
     queryKey: ['resorts'],
-    queryFn: () => base44.entities.Resort.list()
+    queryFn: () => api.entities.Resort.list()
+  });
+
+  const { data: lifts = [] } = useQuery({
+    queryKey: ['lifts', runForm.resort_id],
+    queryFn: () => api.entities.Lift.filter({ resort_id: runForm.resort_id }, 'name'),
+    enabled: !!runForm.resort_id
   });
 
   // Mutations
   const resortMutation = useMutation({
-    mutationFn: (data) => base44.entities.Resort.create(data),
+    mutationFn: (data) => api.entities.Resort.create(data),
     onSuccess: (newResort) => {
       queryClient.invalidateQueries(['resorts']);
       setResortForm({
@@ -78,15 +93,24 @@ export default function AddData() {
   });
 
   const runMutation = useMutation({
-    mutationFn: (data) => base44.entities.Run.create(data),
+    mutationFn: (data) => api.entities.Run.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries(['runs']);
       const resortId = runForm.resort_id;
       setRunForm({
-        name: '', resort_id: resortId, official_difficulty: 'blue', lift: '',
+        name: '', resort_id: resortId, official_difficulty: 'blue', lift: '', lift_id: '',
         length_ft: '', vertical_drop: '', average_pitch: '', max_pitch: '',
         groomed: true, description: ''
       });
+    }
+  });
+
+  const liftMutation = useMutation({
+    mutationFn: (data) => api.entities.Lift.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['lifts']);
+      queryClient.invalidateQueries(['lifts', runForm.resort_id]);
+      queryClient.invalidateQueries(['lifts', liftForm.resort_id]);
     }
   });
 
@@ -118,6 +142,41 @@ export default function AddData() {
     runMutation.mutate(data);
   };
 
+  const handleCreateLiftFromForm = (e) => {
+    e.preventDefault();
+    if (!liftForm.resort_id || !liftForm.name.trim()) {
+      return;
+    }
+
+    liftMutation.mutate({
+      resort_id: liftForm.resort_id,
+      name: liftForm.name.trim(),
+      lift_type: liftForm.lift_type,
+      type: liftForm.lift_type,
+      seat_count: liftForm.seat_count ? parseInt(liftForm.seat_count, 10) : undefined,
+      vertical_rise_ft: liftForm.vertical_rise_ft ? parseInt(liftForm.vertical_rise_ft, 10) : undefined,
+      ride_minutes_avg: liftForm.ride_minutes_avg ? parseFloat(liftForm.ride_minutes_avg) : undefined
+    }, {
+      onSuccess: (createdLift) => {
+        setLiftForm((prev) => ({
+          ...prev,
+          name: '',
+          lift_type: 'chairlift',
+          seat_count: '',
+          vertical_rise_ft: '',
+          ride_minutes_avg: ''
+        }));
+        setRunForm((prev) => ({
+          ...prev,
+          resort_id: createdLift.resort_id,
+          lift_id: createdLift.id,
+          lift: createdLift.name
+        }));
+        setActiveTab('run');
+      }
+    });
+  };
+
   const selectedResort = resorts.find(r => r.id === runForm.resort_id);
 
   return (
@@ -137,6 +196,10 @@ export default function AddData() {
             <TabsTrigger value="run" className="flex-1 rounded-lg">
               <Map className="w-4 h-4 mr-2" />
               Run
+            </TabsTrigger>
+            <TabsTrigger value="lift" className="flex-1 rounded-lg">
+              <Plus className="w-4 h-4 mr-2" />
+              Lift
             </TabsTrigger>
           </TabsList>
 
@@ -298,7 +361,7 @@ export default function AddData() {
                   <Label>Resort *</Label>
                   <Select 
                     value={runForm.resort_id} 
-                    onValueChange={(val) => setRunForm({ ...runForm, resort_id: val })}
+                    onValueChange={(val) => setRunForm({ ...runForm, resort_id: val, lift_id: '', lift: '' })}
                   >
                     <SelectTrigger className="mt-1 rounded-lg">
                       <SelectValue placeholder="Select a resort" />
@@ -351,14 +414,31 @@ export default function AddData() {
                 </div>
 
                 <div>
-                  <Label htmlFor="lift">Lift(s)</Label>
-                  <Input
-                    id="lift"
-                    value={runForm.lift}
-                    onChange={(e) => setRunForm({ ...runForm, lift: e.target.value })}
-                    placeholder="e.g. Chair 4, Gondola"
-                    className="mt-1 rounded-lg"
-                  />
+                  <Label>Lift</Label>
+                  <Select
+                    value={runForm.lift_id || '__none__'}
+                    onValueChange={(val) => {
+                      if (val === '__none__') {
+                        setRunForm((prev) => ({ ...prev, lift_id: '', lift: '' }));
+                        return;
+                      }
+                      const selected = lifts.find((lift) => lift.id === val);
+                      setRunForm((prev) => ({ ...prev, lift_id: val, lift: selected?.name || '' }));
+                    }}
+                    disabled={!runForm.resort_id || lifts.length === 0}
+                  >
+                    <SelectTrigger className="mt-1 rounded-lg">
+                      <SelectValue placeholder={runForm.resort_id ? 'Select lift' : 'Select a resort first'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">No lift selected</SelectItem>
+                      {lifts.map((lift) => (
+                        <SelectItem key={lift.id} value={lift.id}>
+                          {lift.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -465,6 +545,120 @@ export default function AddData() {
                     </Button>
                   </Link>
                 )}
+              </form>
+            </Card>
+          </TabsContent>
+
+          {/* Add Lift */}
+          <TabsContent value="lift" className="mt-4">
+            <Card className="p-4">
+              <form onSubmit={handleCreateLiftFromForm} className="space-y-4">
+                <div>
+                  <Label>Resort *</Label>
+                  <Select
+                    value={liftForm.resort_id}
+                    onValueChange={(val) => setLiftForm((prev) => ({ ...prev, resort_id: val }))}
+                  >
+                    <SelectTrigger className="mt-1 rounded-lg">
+                      <SelectValue placeholder="Select a resort" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {resorts.map((resort) => (
+                        <SelectItem key={resort.id} value={resort.id}>{resort.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="lift-name">Lift Name *</Label>
+                  <Input
+                    id="lift-name"
+                    value={liftForm.name}
+                    onChange={(e) => setLiftForm((prev) => ({ ...prev, name: e.target.value }))}
+                    placeholder="e.g. Gondola One"
+                    className="mt-1 rounded-lg"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <Label>Lift Type</Label>
+                  <Select
+                    value={liftForm.lift_type}
+                    onValueChange={(val) => setLiftForm((prev) => ({ ...prev, lift_type: val }))}
+                  >
+                    <SelectTrigger className="mt-1 rounded-lg">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="chairlift">Chairlift</SelectItem>
+                      <SelectItem value="gondola">Gondola</SelectItem>
+                      <SelectItem value="tram">Tram</SelectItem>
+                      <SelectItem value="magic_carpet">Magic Carpet</SelectItem>
+                      <SelectItem value="t_bar">T-Bar</SelectItem>
+                      <SelectItem value="rope_tow">Rope Tow</SelectItem>
+                      <SelectItem value="funicular">Funicular</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <Label htmlFor="lift-seat-count">Seats</Label>
+                    <Input
+                      id="lift-seat-count"
+                      type="number"
+                      min="1"
+                      max="12"
+                      value={liftForm.seat_count}
+                      onChange={(e) => setLiftForm((prev) => ({ ...prev, seat_count: e.target.value }))}
+                      placeholder="4"
+                      className="mt-1 rounded-lg"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="lift-vertical">Lift Vert (ft)</Label>
+                    <Input
+                      id="lift-vertical"
+                      type="number"
+                      min="0"
+                      value={liftForm.vertical_rise_ft}
+                      onChange={(e) => setLiftForm((prev) => ({ ...prev, vertical_rise_ft: e.target.value }))}
+                      placeholder="1200"
+                      className="mt-1 rounded-lg"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="lift-ride-minutes">Ride Length (min)</Label>
+                    <Input
+                      id="lift-ride-minutes"
+                      type="number"
+                      step="0.1"
+                      min="0.1"
+                      value={liftForm.ride_minutes_avg}
+                      onChange={(e) => setLiftForm((prev) => ({ ...prev, ride_minutes_avg: e.target.value }))}
+                      placeholder="7.5"
+                      className="mt-1 rounded-lg"
+                    />
+                  </div>
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={liftMutation.isPending || !liftForm.resort_id || !liftForm.name.trim()}
+                  className="w-full bg-slate-900 hover:bg-slate-800 rounded-xl h-11"
+                >
+                  {liftMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Lift
+                    </>
+                  )}
+                </Button>
               </form>
             </Card>
           </TabsContent>

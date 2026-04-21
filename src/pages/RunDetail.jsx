@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { createPageUrl } from '../utils';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   ArrowLeft, Loader2, Cog, Mountain, MessageSquare, 
@@ -22,13 +22,16 @@ import CrowdRating from '../components/CrowdRating';
 import TagBadge, { availableTags } from '../components/TagBadge';
 import RatingSlider from '../components/RatingSlider';
 import EmptyState from '../components/EmptyState';
-import { format } from 'date-fns';
+import { useRatingMode } from '@/lib/RatingModeContext';
+import { getRatingModeLabel } from '@/lib/ratingMode';
+import { format, formatDistanceToNowStrict } from 'date-fns';
 
 export default function RunDetail() {
   const [searchParams] = useSearchParams();
   const location = useLocation();
   const runId = searchParams.get('id');
   const queryClient = useQueryClient();
+  const { ratingMode } = useRatingMode();
   
   const [showRatingForm, setShowRatingForm] = useState(false);
   const [showNoteForm, setShowNoteForm] = useState(false);
@@ -41,26 +44,32 @@ export default function RunDetail() {
 
   const { data: run, isLoading: runLoading } = useQuery({
     queryKey: ['run', runId],
-    queryFn: () => base44.entities.Run.filter({ id: runId }),
+    queryFn: () => api.entities.Run.filter({ id: runId }),
     enabled: !!runId,
     select: (data) => data[0]
   });
 
   const { data: resort } = useQuery({
     queryKey: ['resort', run?.resort_id],
-    queryFn: () => base44.entities.Resort.filter({ id: run.resort_id }),
+    queryFn: () => api.entities.Resort.filter({ id: run.resort_id }),
     enabled: !!run?.resort_id,
     select: (data) => data[0]
   });
 
+  const liftPageUrl = run?.lift_id
+    ? createPageUrl(`Lift?id=${run.lift_id}`)
+    : run?.lift && run?.resort_id
+      ? createPageUrl(`Lift?resort=${run.resort_id}&name=${encodeURIComponent(run.lift)}`)
+      : null;
+
   const { data: currentUser } = useQuery({
     queryKey: ['me'],
-    queryFn: () => base44.auth.me()
+    queryFn: () => api.auth.me()
   });
 
   const { data: ratings = [] } = useQuery({
-    queryKey: ['ratings', runId],
-    queryFn: () => base44.entities.DifficultyRating.filter({ run_id: runId }),
+    queryKey: ['ratings', runId, ratingMode],
+    queryFn: () => api.entities.DifficultyRating.filter({ run_id: runId, mode: ratingMode }),
     enabled: !!runId
   });
 
@@ -68,28 +77,55 @@ export default function RunDetail() {
   const baseRatingByDiff = { green: 2, blue: 4, black: 7, double_black: 9, terrain_park: 3 };
 
   const { data: notes = [] } = useQuery({
-    queryKey: ['notes', runId],
-    queryFn: () => base44.entities.ConditionNote.filter({ run_id: runId }),
+    queryKey: ['notes', runId, run?.lift_id],
+    queryFn: () => {
+      if (run?.lift_id) {
+        return api.entities.ConditionNote.filter({ $or: [{ run_id: runId }, { lift_id: run.lift_id }] }, '-created_date', 100);
+      }
+      return api.entities.ConditionNote.filter({ run_id: runId }, '-created_date', 100);
+    },
     enabled: !!runId
   });
 
   const { data: allRuns = [] } = useQuery({
     queryKey: ['all-runs'],
-    queryFn: () => base44.entities.Run.list(),
+    queryFn: () => api.entities.Run.list(),
   });
 
   const { data: allResorts = [] } = useQuery({
     queryKey: ['all-resorts'],
-    queryFn: () => base44.entities.Resort.list(),
+    queryFn: () => api.entities.Resort.list(),
   });
 
   const { data: comparisons = [] } = useQuery({
     queryKey: ['comparisons', runId],
     queryFn: async () => {
-      const all = await base44.entities.CrossResortComparison.list();
+      const all = await api.entities.CrossResortComparison.list();
       return all.filter(c => c.run1_id === runId || c.run2_id === runId);
     },
     enabled: !!runId
+  });
+
+  const { data: liftWaitReports = [] } = useQuery({
+    queryKey: ['lift-wait-reports', run?.lift_id, run?.lift, run?.resort_id],
+    queryFn: () => {
+      if (run?.lift_id) {
+        return api.entities.LiftWaitReport.filter({ lift_id: run.lift_id }, '-created_date', 20);
+      }
+      return api.entities.LiftWaitReport.filter({ resort_id: run?.resort_id, lift_name: run?.lift }, '-created_date', 20);
+    },
+    enabled: !!run?.lift
+  });
+
+  const { data: liftStatusUpdates = [] } = useQuery({
+    queryKey: ['lift-status-updates', run?.lift_id, run?.lift, run?.resort_id],
+    queryFn: () => {
+      if (run?.lift_id) {
+        return api.entities.LiftStatusUpdate.filter({ lift_id: run.lift_id }, '-created_date', 20);
+      }
+      return api.entities.LiftStatusUpdate.filter({ resort_id: run?.resort_id, lift_name: run?.lift }, '-created_date', 20);
+    },
+    enabled: !!run?.lift
   });
 
   const runMap = allRuns.reduce((acc, r) => ({ ...acc, [r.id]: r }), {});
@@ -111,12 +147,20 @@ export default function RunDetail() {
 
   // Get all unique tags from notes
   const allTags = [...new Set(notes.flatMap(n => n.tags || []))];
+  const latestLiftWait = liftWaitReports[0] || null;
+  const recentOpenLiftReports = liftWaitReports
+    .filter((report) => report.report_status !== 'closed')
+    .slice(0, 2);
+  const currentLiftWaitMinutes = recentOpenLiftReports.length
+    ? Math.round(recentOpenLiftReports.reduce((sum, report) => sum + report.wait_minutes, 0) / recentOpenLiftReports.length)
+    : null;
+  const latestLiftStatus = liftStatusUpdates[0] || null;
 
   // Mutations
   const ratingMutation = useMutation({
-    mutationFn: (data) => base44.entities.DifficultyRating.create(data),
+    mutationFn: (data) => api.entities.DifficultyRating.create(data),
     onSuccess: () => {
-      queryClient.invalidateQueries(['ratings', runId]);
+      queryClient.invalidateQueries(['ratings']);
       setShowRatingForm(false);
       setNewRating(5);
       setRatingComment('');
@@ -124,18 +168,21 @@ export default function RunDetail() {
   });
 
   const noteMutation = useMutation({
-    mutationFn: (data) => base44.entities.ConditionNote.create(data),
+    mutationFn: (data) => api.entities.ConditionNote.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries(['notes', runId]);
+      queryClient.invalidateQueries(['notes', runId, run?.lift_id]);
       setShowNoteForm(false);
       setNewNote('');
       setSelectedTags([]);
     }
   });
 
+
   const handleSubmitRating = () => {
     ratingMutation.mutate({
       run_id: runId,
+      mode: ratingMode,
       rating: newRating,
       skill_level: skillLevel,
       conditions: conditions,
@@ -146,6 +193,7 @@ export default function RunDetail() {
   const handleSubmitNote = () => {
     noteMutation.mutate({
       run_id: runId,
+      lift_id: run?.lift_id || undefined,
       note: newNote || selectedTags.join(', '),
       tags: selectedTags,
       date_observed: new Date().toISOString().split('T')[0]
@@ -196,7 +244,7 @@ export default function RunDetail() {
             {resort?.name || 'Back'}
           </Link>
           <Link
-            to={createPageUrl(`SuggestEdit?type=run&name=${encodeURIComponent(run?.name || '')}&back=${encodeURIComponent(location.pathname + location.search)}`)}
+            to={createPageUrl(`SuggestEdit?type=run&id=${encodeURIComponent(runId)}&name=${encodeURIComponent(run?.name || '')}&back=${encodeURIComponent(location.pathname + location.search)}`)}
             className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600"
           >
             <Pencil className="w-3 h-3" />
@@ -211,7 +259,13 @@ export default function RunDetail() {
             {run.lift && (
               <div className="flex items-center gap-1.5 mt-1 text-slate-500">
                 <Cog className="w-3.5 h-3.5" />
-                <span className="text-sm">{run.lift}</span>
+                {liftPageUrl ? (
+                  <Link to={liftPageUrl} className="text-sm text-sky-700 hover:underline">
+                    {run.lift}
+                  </Link>
+                ) : (
+                  <span className="text-sm">{run.lift}</span>
+                )}
               </div>
             )}
           </div>
@@ -221,13 +275,13 @@ export default function RunDetail() {
         <div className="mt-6 p-4 bg-slate-50 rounded-xl">
           <div className="flex items-center justify-between">
             <div>
-              <span className="text-xs uppercase tracking-wider text-slate-400 font-medium">Crowd Rating</span>
+              <span className="text-xs uppercase tracking-wider text-slate-400 font-medium">{getRatingModeLabel(ratingMode)} Crowd Rating</span>
               <div className="mt-1">
                 <CrowdRating rating={avgRating} count={ratings.length} size="lg" />
               </div>
             </div>
             {userRatedToday ? (
-              <span className="text-xs text-slate-400 text-right max-w-24">Already rated today</span>
+              <span className="text-xs text-slate-400 text-right max-w-24">Already rated {getRatingModeLabel(ratingMode).toLowerCase()} today</span>
             ) : (
               <Button 
                 onClick={() => setShowRatingForm(!showRatingForm)}
@@ -239,10 +293,46 @@ export default function RunDetail() {
           </div>
         </div>
 
+        {run.lift && (
+          <Card className="mt-4 p-4 border-slate-200">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-wider text-slate-400 font-medium">Lift Status</p>
+                {liftPageUrl ? (
+                  <Link to={liftPageUrl} className="text-base font-semibold text-slate-900 mt-1 inline-block hover:underline">
+                    {run.lift}
+                  </Link>
+                ) : (
+                  <h3 className="text-base font-semibold text-slate-900 mt-1">{run.lift}</h3>
+                )}
+                {latestLiftWait ? (
+                  <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    {latestLiftWait.report_status === 'closed' ? 'Currently closed' : currentLiftWaitMinutes !== null ? `${currentLiftWaitMinutes} min current wait` : 'No wait reports yet'} · updated {formatDistanceToNowStrict(new Date(latestLiftWait.created_date), { addSuffix: true })}
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-500 mt-1">No lift reports yet today.</p>
+                )}
+                {latestLiftStatus && (
+                  <p className="text-xs mt-1 text-slate-500">
+                    Status: <span className="font-medium text-slate-700">{latestLiftStatus.status}</span> {latestLiftStatus.verified ? '(confirmed)' : '(awaiting one more report)'}
+                  </p>
+                )}
+              </div>
+              <Link to={liftPageUrl || createPageUrl('LiftBoard')}>
+                <Button variant="outline" className="rounded-xl h-10">
+                  Report From Lift Page
+                </Button>
+              </Link>
+            </div>
+          </Card>
+        )}
+
         {/* Rating Form */}
         {showRatingForm && (
           <Card className="mt-4 p-4 border-sky-200 bg-sky-50/50">
-            <h3 className="font-semibold text-slate-900 mb-4">Submit Your Rating</h3>
+            <h3 className="font-semibold text-slate-900 mb-2">Submit Your Rating</h3>
+            <p className="text-xs text-slate-500 mb-4">Submitting in {getRatingModeLabel(ratingMode)} mode.</p>
             
             <RatingSlider value={newRating} onChange={setNewRating} />
             
@@ -371,7 +461,7 @@ export default function RunDetail() {
             className="text-sky-600"
           >
             <MessageSquare className="w-4 h-4 mr-1" />
-            Add Note
+            Report
           </Button>
         </div>
 
@@ -379,15 +469,15 @@ export default function RunDetail() {
         {showNoteForm && (
           <Card className="p-4 mb-4 border-sky-200 bg-sky-50/50">
             <Textarea
-              placeholder="Describe conditions (optional)"
+              placeholder="Optional note"
               value={newNote}
               onChange={(e) => setNewNote(e.target.value)}
-              className="rounded-lg"
+              className="rounded-lg text-base"
               rows={2}
             />
             
             <div className="mt-3">
-              <span className="text-xs text-slate-500 mb-2 block">Add tags:</span>
+              <span className="text-xs text-slate-500 mb-2 block">Tap conditions</span>
               <div className="flex flex-wrap gap-2">
                 {availableTags.map(tag => (
                   <TagBadge 
@@ -405,21 +495,21 @@ export default function RunDetail() {
               <Button 
                 variant="outline" 
                 onClick={() => setShowNoteForm(false)}
-                className="flex-1 rounded-lg"
+                className="flex-1 rounded-lg min-h-12 text-base"
               >
                 Cancel
               </Button>
               <Button 
                 onClick={handleSubmitNote}
                 disabled={selectedTags.length === 0 && !newNote.trim() || noteMutation.isPending}
-                className="flex-1 bg-slate-900 hover:bg-slate-800 rounded-lg"
+                className="flex-1 bg-slate-900 hover:bg-slate-800 rounded-lg min-h-12 text-base"
               >
                 {noteMutation.isPending ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <>
                     <Send className="w-4 h-4 mr-1" />
-                    Post
+                    Save
                   </>
                 )}
               </Button>
@@ -508,7 +598,7 @@ export default function RunDetail() {
       {ratings.length > 0 && (
         <div className="px-4 py-4 border-t border-slate-100">
           <h2 className="text-sm font-semibold text-slate-900 mb-3">
-            Recent Ratings
+            Recent {getRatingModeLabel(ratingMode)} Ratings
           </h2>
           <div className="space-y-2">
             {ratings

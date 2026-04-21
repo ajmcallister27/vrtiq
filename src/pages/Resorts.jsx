@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';
-import { base44 } from '@/api/base44Client';
+import { api } from '@/api/apiClient';
 import { useQuery } from '@tanstack/react-query';
 import { Search, Plus, Mountain, Loader2, Filter } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -21,12 +21,12 @@ export default function Resorts() {
 
   const { data: resorts = [], isLoading } = useQuery({
     queryKey: ['resorts'],
-    queryFn: () => base44.entities.Resort.list()
+    queryFn: () => api.entities.Resort.list()
   });
 
   const { data: runs = [] } = useQuery({
     queryKey: ['runs'],
-    queryFn: () => base44.entities.Run.list()
+    queryFn: () => api.entities.Run.list()
   });
 
   // Calculate run counts
@@ -53,9 +53,9 @@ export default function Resorts() {
     });
 
   return (
-    <div className="pb-6">
+    <div className="pb-8">
       {/* Header */}
-      <div className="px-4 pt-6 pb-4">
+      <div className="px-4 pt-6 pb-4 lg:px-6">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-bold text-slate-900">All Resorts</h1>
           <Link to={createPageUrl('AddData')}>
@@ -99,7 +99,7 @@ export default function Resorts() {
       </div>
 
       {/* Results */}
-      <div className="px-4">
+      <div className="px-4 lg:px-6">
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
@@ -119,8 +119,8 @@ export default function Resorts() {
             }
           />
         ) : (
-          <div className="space-y-2">
-            <p className="text-xs text-slate-400 mb-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <p className="text-xs text-slate-400 sm:col-span-2 xl:col-span-3">
               {filteredResorts.length} resort{filteredResorts.length !== 1 ? 's' : ''}
             </p>
             {filteredResorts.map(resort => (

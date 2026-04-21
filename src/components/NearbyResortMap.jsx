@@ -1,6 +1,5 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
-import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';
 
 // Fix leaflet marker icons
