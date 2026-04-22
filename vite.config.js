@@ -48,12 +48,35 @@ export default defineConfig({
         'pwa-512x512.png'
       ],
       manifest: {
+        id: '/',
         name: 'vrtIQ',
         short_name: 'vrtIQ',
-        description: 'Real Difficulty',
+        description: 'Real-time ski run difficulty, lift waits, and resort condition intelligence.',
+        categories: ['sports', 'travel', 'navigation', 'weather'],
+        lang: 'en-US',
+        orientation: 'portrait-primary',
+        start_url: '/',
+        scope: '/',
         theme_color: '#0EA5E9',
         background_color: '#ffffff',
         display: 'standalone',
+        shortcuts: [
+          {
+            name: 'Browse Resorts',
+            short_name: 'Resorts',
+            url: '/#/Resorts'
+          },
+          {
+            name: 'Compare Runs',
+            short_name: 'Compare',
+            url: '/#/Compare'
+          },
+          {
+            name: 'Lift Board',
+            short_name: 'Lifts',
+            url: '/#/LiftBoard'
+          }
+        ],
         icons: [
           {
             src: 'pwa-192x192.png',

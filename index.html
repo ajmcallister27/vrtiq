@@ -5,19 +5,72 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
     <!-- SEO & mobile -->
-    <meta name="description" content="Real Difficulty - vrtIQ" />
+    <title>vrtIQ | Real-Time Ski Run Difficulty, Lift Waits, and Resort Conditions</title>
+    <meta name="description" content="vrtIQ helps skiers compare real run difficulty, monitor lift lines, and track mountain conditions across resorts. Discover where to ski smarter with crowd-sourced mountain intelligence." />
+    <meta name="keywords" content="ski app, ski conditions app, ski run difficulty, lift wait times, resort conditions, mountain report app, ski planning, snow conditions tracker, ski intelligence" />
+    <meta name="author" content="vrtIQ" />
+    <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
+    <link rel="canonical" href="https://vrtiq.com/" />
     <meta name="theme-color" content="#0EA5E9" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="vrtIQ" />
+    <meta property="og:title" content="vrtIQ | Real-Time Ski Run Difficulty, Lift Waits, and Resort Conditions" />
+    <meta property="og:description" content="Compare true run difficulty, check live lift intel, and track conditions before you ski." />
+    <meta property="og:url" content="https://vrtiq.com/" />
+    <meta property="og:image" content="https://vrtiq.com/pwa-512x512.png" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="vrtIQ | Real-Time Ski Run Difficulty, Lift Waits, and Resort Conditions" />
+    <meta name="twitter:description" content="Find accurate ski run difficulty and lift conditions in one app." />
+    <meta name="twitter:image" content="https://vrtiq.com/pwa-512x512.png" />
 
     <!-- Favicon & manifest -->
     <link rel="icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/pwa-192x192.png" />
     <!-- Vite PWA plugin will generate manifest.webmanifest -->
 
-    <title>vrtIQ</title>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "vrtIQ",
+        "url": "https://vrtiq.com/",
+        "description": "Real-time ski intelligence for run difficulty, lift waits, and mountain conditions.",
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": "https://vrtiq.com/#/Resorts",
+          "query-input": "required name=search_term_string"
+        }
+      }
+    </script>
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "vrtIQ",
+        "applicationCategory": "SportsApplication",
+        "operatingSystem": "Web, iOS, Android",
+        "url": "https://vrtiq.com/",
+        "description": "A ski and snowboard intelligence app for comparing real run difficulty, lift queue updates, and resort conditions.",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        }
+      }
+    </script>
   </head>
   <body>
+    <noscript>
+      vrtIQ helps you discover ski run difficulty, lift wait conditions, and mountain updates across resorts.
+      Enable JavaScript to use the full app.
+    </noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

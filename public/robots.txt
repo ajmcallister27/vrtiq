@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://vrtiq.com/sitemap.xml
+
+# Keep auth and admin routes out of indexation
+Disallow: /#/Admin
+Disallow: /#/Login
+Disallow: /#/SeedData

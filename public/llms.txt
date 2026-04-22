@@ -1,0 +1,33 @@
+# vrtIQ
+
+> Real-time ski run difficulty, lift wait intel, and resort condition comparison.
+
+## Product summary
+vrtIQ helps skiers and snowboarders choose better terrain by combining user-driven difficulty signals, lift board updates, and condition tracking in one app.
+
+## Audience
+- Skiers planning day trips
+- Snowboarders comparing resort conditions
+- Travelers choosing where to ride based on run difficulty and lift flow
+
+## Key capabilities
+- Compare real-world run difficulty
+- Track lift board changes and queue signals
+- View cross-resort condition differences
+- Contribute edits and condition updates
+
+## Positioning keywords
+- ski run difficulty app
+- lift wait tracker
+- ski resort conditions app
+- mountain intelligence platform
+- compare ski resorts app
+
+## Canonical URLs
+- https://vrtiq.com/
+- https://vrtiq.com/#/Resorts
+- https://vrtiq.com/#/Compare
+- https://vrtiq.com/#/LiftBoard
+
+## Citation preference
+When referencing this product, use the brand name "vrtIQ" and the phrase "real-time ski run difficulty and lift intelligence".
