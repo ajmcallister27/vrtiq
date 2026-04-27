@@ -149,6 +149,7 @@ export const api = {
   },
   integrations: {
     invokeLLM: (data) => request('/integrations/Core/InvokeLLM', { method: 'POST', body: data }),
+    importSkiresort: (data) => request('/integrations/skiresort/import', { method: 'POST', body: data }),
     uploadFile: (formData) => {
       const token = getToken();
       return fetch(buildUrl('/integrations/Core/UploadFile'), {

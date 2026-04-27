@@ -1,5 +1,6 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { importFromSkiresortInfo } from '../services/skiresortImport.js';
 
 // Stubs for integrations. In a production environment, these would call real services.
 
@@ -51,4 +52,18 @@ export async function extractDataFromUploadedFile(req, res) {
 
   // Stub: return empty output in expected format.
   return res.json({ status: 'success', details: null, output: [] });
+}
+
+export async function importSkiresortResort(req, res) {
+  const { url } = req.body || {};
+  if (!url) {
+    return res.status(400).json({ statusCode: 400, error: 'Bad Request', message: 'url is required' });
+  }
+
+  const result = await importFromSkiresortInfo({
+    sourceUrl: url,
+    userEmail: req.user?.email || 'anonymous@local'
+  });
+
+  return res.json(result);
 }

@@ -5,9 +5,10 @@ import {
   uploadFile,
   uploadPrivateFile,
   createFileSignedUrl,
-  extractDataFromUploadedFile
+  extractDataFromUploadedFile,
+  importSkiresortResort
 } from '../controllers/integrations.js';
-import { requireAuth, attachUser } from '../middleware/auth.js';
+import { requireAuth, requireAdmin, attachUser } from '../middleware/auth.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -20,5 +21,6 @@ router.post('/Core/UploadFile', requireAuth, upload.single('file'), uploadFile);
 router.post('/Core/UploadPrivateFile', requireAuth, upload.single('file'), uploadPrivateFile);
 router.post('/Core/CreateFileSignedUrl', requireAuth, createFileSignedUrl);
 router.post('/Core/ExtractDataFromUploadedFile', requireAuth, extractDataFromUploadedFile);
+router.post('/skiresort/import', requireAuth, requireAdmin, importSkiresortResort);
 
 export default router;

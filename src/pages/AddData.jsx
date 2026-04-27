@@ -5,7 +5,7 @@ import { api } from '@/api/apiClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Mountain, Map, Loader2, Check, ChevronRight, 
-  Plus
+  Plus, Download
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -65,6 +65,8 @@ export default function AddData() {
     vertical_rise_ft: '',
     ride_minutes_avg: ''
   });
+  const [importUrl, setImportUrl] = useState('');
+  const [importResult, setImportResult] = useState(null);
 
   const { data: resorts = [] } = useQuery({
     queryKey: ['resorts'],
@@ -111,6 +113,21 @@ export default function AddData() {
       queryClient.invalidateQueries(['lifts']);
       queryClient.invalidateQueries(['lifts', runForm.resort_id]);
       queryClient.invalidateQueries(['lifts', liftForm.resort_id]);
+    }
+  });
+
+  const bulkImportMutation = useMutation({
+    mutationFn: (url) => api.integrations.importSkiresort({ url }),
+    onSuccess: (result) => {
+      setImportResult(result);
+      const resortId = result?.resort?.id;
+      if (resortId) {
+        setRunForm((prev) => ({ ...prev, resort_id: resortId }));
+        setLiftForm((prev) => ({ ...prev, resort_id: resortId }));
+      }
+      queryClient.invalidateQueries(['resorts']);
+      queryClient.invalidateQueries(['lifts']);
+      queryClient.invalidateQueries(['runs']);
     }
   });
 
@@ -177,6 +194,16 @@ export default function AddData() {
     });
   };
 
+  const handleBulkImportSubmit = (e) => {
+    e.preventDefault();
+    if (!importUrl.trim()) {
+      return;
+    }
+
+    setImportResult(null);
+    bulkImportMutation.mutate(importUrl.trim());
+  };
+
   const selectedResort = resorts.find(r => r.id === runForm.resort_id);
 
   return (
@@ -201,7 +228,91 @@ export default function AddData() {
               <Plus className="w-4 h-4 mr-2" />
               Lift
             </TabsTrigger>
+            <TabsTrigger value="bulk" className="flex-1 rounded-lg">
+              <Download className="w-4 h-4 mr-2" />
+              Bulk
+            </TabsTrigger>
           </TabsList>
+
+          {/* Bulk Import */}
+          <TabsContent value="bulk" className="mt-4">
+            <Card className="p-4 space-y-4">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-900">Import From skiresort.info</h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  Paste a skiresort.info resort URL to auto-import resort info, lifts, and runs.
+                </p>
+              </div>
+
+              <form onSubmit={handleBulkImportSubmit} className="space-y-3">
+                <div>
+                  <Label htmlFor="import-url">skiresort.info URL *</Label>
+                  <Input
+                    id="import-url"
+                    value={importUrl}
+                    onChange={(e) => setImportUrl(e.target.value)}
+                    placeholder="https://www.skiresort.info/ski-resort/..."
+                    className="mt-1 rounded-lg"
+                    required
+                  />
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={bulkImportMutation.isPending || !importUrl.trim()}
+                  className="w-full bg-slate-900 hover:bg-slate-800 rounded-xl h-11"
+                >
+                  {bulkImportMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Importing Data...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4 mr-2" />
+                      Import Resort, Lifts, and Runs
+                    </>
+                  )}
+                </Button>
+              </form>
+
+              {bulkImportMutation.isError && (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+                  {bulkImportMutation.error?.message || 'Import failed.'}
+                </div>
+              )}
+
+              {importResult && (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 space-y-2">
+                  <p className="text-sm font-medium text-emerald-800">
+                    Imported {importResult.resort?.name || 'resort'} successfully.
+                  </p>
+                  <p className="text-xs text-emerald-700">
+                    Scraped: {importResult.scraped?.lifts || 0} lifts, {importResult.scraped?.runs || 0} runs, {importResult.scraped?.map_assets_analyzed || 0} map assets analyzed.
+                  </p>
+                  <p className="text-xs text-emerald-700">
+                    Database: {importResult.database?.liftsCreated || 0} lifts created, {importResult.database?.liftsUpdated || 0} lifts updated, {importResult.database?.runsCreated || 0} runs created, {importResult.database?.runsUpdated || 0} runs updated.
+                  </p>
+                  {Array.isArray(importResult.warnings) && importResult.warnings.length > 0 && (
+                    <div className="rounded-md bg-amber-50 border border-amber-200 p-2">
+                      <p className="text-xs font-medium text-amber-700 mb-1">Warnings</p>
+                      {importResult.warnings.map((warning) => (
+                        <p key={warning} className="text-xs text-amber-700">• {warning}</p>
+                      ))}
+                    </div>
+                  )}
+                  {importResult.resort?.id && (
+                    <Link to={createPageUrl(`Resort?id=${importResult.resort.id}`)} className="block">
+                      <Button variant="outline" className="w-full rounded-xl">
+                        View Imported Resort
+                        <ChevronRight className="w-4 h-4 ml-1" />
+                      </Button>
+                    </Link>
+                  )}
+                </div>
+              )}
+            </Card>
+          </TabsContent>
 
           {/* Add Resort */}
           <TabsContent value="resort" className="mt-4">

@@ -18,6 +18,7 @@
     "@prisma/adapter-libsql": "^5.13.0",
     "@prisma/client": "^5.13.0",
     "bcrypt": "^5.1.0",
+    "cheerio": "^1.1.2",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "envalid": "^8.1.1",
@@ -27,7 +28,8 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.1",
     "multer": "^1.4.5-lts.1",
-    "sqlite3": "^5.1.6"
+    "sqlite3": "^5.1.6",
+    "tesseract.js": "^6.0.1"
   },
   "devDependencies": {
     "nodemon": "^3.0.1",

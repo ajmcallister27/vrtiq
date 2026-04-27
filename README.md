@@ -65,6 +65,27 @@ Production build:
 npm run build
 ```
 
+## Admin bulk import from skiresort.info
+
+Use the Add Data page to import a full resort dataset in one step:
+
+1. Open `Add Data`.
+2. Go to the `Bulk` tab.
+3. Paste a `skiresort.info` resort URL.
+4. Submit the import.
+
+The importer will:
+
+- scrape resort metadata (name, location, elevations, coordinates when available)
+- scrape lifts and upsert them into the resort
+- scrape runs and difficulty, then upsert runs
+- analyze trail map assets with OCR to improve run matching where possible
+
+Notes:
+
+- Import requires an authenticated admin user.
+- Trail-map OCR is best-effort because source map quality varies.
+
 ## Current priorities
 
 - filter by condition per day

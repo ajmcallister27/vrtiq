@@ -6,6 +6,7 @@ It implements:
 - **Entities API** (`/api/v1/entities/*`) with filtering, sorting, pagination
 - **Authentication** (`/api/v1/auth/*`) using JWT
 - **Integrations** (`/api/v1/integrations/Core/*`) for LLM and file operations (stubbed)
+- **Admin resort importer** (`POST /api/v1/integrations/skiresort/import`) for skiresort.info bulk resort/lift/run ingestion
 - **App public settings** (`/api/apps/public/prod/public-settings/by-id/:id`)
 
 ## Getting Started
@@ -82,6 +83,7 @@ Alternatively, you can add a hosts entry to point `vrtiq.base44.app` to `127.0.0
 
 - The backend enforces JWT auth for creating/updating entities and integration endpoints.
 - A default admin user is created by `npm run seed` (email/password in `.env`).
+- The skiresort importer route requires `admin` role and accepts body `{ "url": "https://www.skiresort.info/..." }`.
 
 ## Production Deployment
 
