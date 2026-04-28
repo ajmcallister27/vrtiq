@@ -15,6 +15,7 @@ import EmptyState from '../components/EmptyState';
 import { useRatingMode } from '@/lib/RatingModeContext';
 
 const difficultyOrder = { green: 1, blue: 2, black: 3, double_black: 4, terrain_park: 5 };
+const officialDifficultyRating = { green: 2, blue: 4, black: 7, double_black: 9, terrain_park: 3 };
 
 export default function Resort() {
   const [searchParams] = useSearchParams();
@@ -69,8 +70,11 @@ export default function Resort() {
     return acc;
   }, {});
 
-  const avgRatingByRun = Object.entries(ratingsByRun).reduce((acc, [runId, ratings]) => {
-    acc[runId] = ratings.reduce((sum, r) => sum + r, 0) / ratings.length;
+  const avgRatingWithOfficialByRun = runs.reduce((acc, run) => {
+    const officialRating = officialDifficultyRating[run.official_difficulty] || 5;
+    const crowdRatings = ratingsByRun[run.id] || [];
+    const allRatings = [officialRating, ...crowdRatings];
+    acc[run.id] = allRatings.reduce((sum, r) => sum + r, 0) / allRatings.length;
     return acc;
   }, {});
 
@@ -82,7 +86,7 @@ export default function Resort() {
       if (sortBy === 'official') {
         comparison = (difficultyOrder[a.official_difficulty] || 0) - (difficultyOrder[b.official_difficulty] || 0);
       } else if (sortBy === 'crowd') {
-        comparison = (avgRatingByRun[b.id] || 0) - (avgRatingByRun[a.id] || 0);
+        comparison = (avgRatingWithOfficialByRun[b.id] || 0) - (avgRatingWithOfficialByRun[a.id] || 0);
       } else {
         comparison = a.name.localeCompare(b.name);
       }
@@ -291,8 +295,8 @@ export default function Resort() {
               <RunCard
                 key={run.id}
                 run={run}
-                avgRating={avgRatingByRun[run.id]}
-                ratingCount={ratingsByRun[run.id]?.length}
+                avgRating={avgRatingWithOfficialByRun[run.id]}
+                ratingCount={(ratingsByRun[run.id]?.length || 0) + 1}
               />
             ))}
           </div>
