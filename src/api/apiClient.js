@@ -71,12 +71,6 @@ async function request(path, { method = 'GET', body, query, headers = {} } = {})
   }
 
   const res = await fetch(url, init);
-  if (res.status === 401) {
-    clearToken();
-    window.location.hash = '#/Login';
-    throw new Error('Unauthorized');
-  }
-
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;
 

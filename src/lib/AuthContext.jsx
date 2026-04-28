@@ -3,6 +3,48 @@ import { useNavigate } from 'react-router-dom';
 import { api, setToken, clearToken, getToken } from '@/api/apiClient';
 
 const AuthContext = createContext();
+const CACHED_USER_KEY = 'vrtIQ_cached_user';
+
+function decodeJwtPayload(token) {
+  try {
+    const parts = String(token || '').split('.');
+    if (parts.length < 2) return null;
+
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
+    const payload = JSON.parse(window.atob(padded));
+
+    if (!payload?.email) return null;
+    return {
+      email: payload.email,
+      role: payload.role || 'user',
+      full_name: payload.email,
+      isRecovered: true,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function getCachedUser() {
+  try {
+    const raw = localStorage.getItem(CACHED_USER_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && parsed.email ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function setCachedUser(user) {
+  if (!user) return;
+  localStorage.setItem(CACHED_USER_KEY, JSON.stringify(user));
+}
+
+function clearCachedUser() {
+  localStorage.removeItem(CACHED_USER_KEY);
+}
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -25,19 +67,29 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
       setIsAuthenticated(false);
       setAuthError({ type: 'auth_required', message: 'Authentication required' });
+      clearCachedUser();
       setIsLoadingAuth(false);
       return;
+    }
+
+    const recoveredUser = getCachedUser() || decodeJwtPayload(token);
+    if (recoveredUser) {
+      setUser(recoveredUser);
+      setIsAuthenticated(true);
+      setCachedUser(recoveredUser);
     }
 
     try {
       const currentUser = await api.auth.me();
       setUser(currentUser);
       setIsAuthenticated(true);
+      setCachedUser(currentUser);
     } catch (error) {
-      clearToken();
-      setUser(null);
-      setIsAuthenticated(false);
-      setAuthError({ type: 'auth_required', message: 'Authentication required' });
+      if (!recoveredUser) {
+        setUser(null);
+        setIsAuthenticated(false);
+        setAuthError({ type: 'auth_unavailable', message: 'Unable to verify session right now.' });
+      }
     } finally {
       setIsLoadingAuth(false);
     }
@@ -52,6 +104,7 @@ export const AuthProvider = ({ children }) => {
       setToken(token);
       setUser(currentUser);
       setIsAuthenticated(true);
+      setCachedUser(currentUser);
       return currentUser;
     } catch (error) {
       clearToken();
@@ -73,6 +126,7 @@ export const AuthProvider = ({ children }) => {
       setToken(token);
       setUser(currentUser);
       setIsAuthenticated(true);
+      setCachedUser(currentUser);
       return currentUser;
     } catch (error) {
       clearToken();
@@ -87,6 +141,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     clearToken();
+    clearCachedUser();
     setUser(null);
     setIsAuthenticated(false);
     try {

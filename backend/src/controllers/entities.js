@@ -168,6 +168,26 @@ function normalizeConditionList(value) {
     .filter(Boolean);
 }
 
+function normalizeNullableStringField(data, field) {
+  if (!(field in data)) {
+    return;
+  }
+
+  const raw = data[field];
+  if (raw === undefined || raw === null) {
+    delete data[field];
+    return;
+  }
+
+  const normalized = String(raw).trim();
+  if (!normalized) {
+    delete data[field];
+    return;
+  }
+
+  data[field] = normalized;
+}
+
 export async function listEntities(req, res, next) {
   const config = getEntityConfig(req.params.entity);
   if (!config) {
@@ -339,6 +359,13 @@ export async function createEntity(req, res, next) {
     data.tags = JSON.stringify(data.tags);
   }
 
+  if (config.name === 'Run') {
+    normalizeNullableStringField(data, 'name');
+    normalizeNullableStringField(data, 'resort_id');
+    normalizeNullableStringField(data, 'lift_id');
+    normalizeNullableStringField(data, 'lift');
+  }
+
   if (config.name === 'LiftWaitReport' || config.name === 'LiftStatusUpdate') {
     if (data.run_id && (!data.resort_id || !data.lift_name)) {
       const run = await prisma.run.findUnique({ where: { id: data.run_id } });
@@ -400,6 +427,13 @@ export async function createEntity(req, res, next) {
     }
     data.lift = lift.name;
     data.resort_id = lift.resort_id;
+  }
+
+  if (config.name === 'Run' && data.resort_id) {
+    const resort = await prisma.resort.findUnique({ where: { id: data.resort_id } });
+    if (!resort) {
+      return res.status(400).json({ statusCode: 400, error: 'Bad Request', message: 'Selected resort does not exist.' });
+    }
   }
 
   if (config.name === 'Lift') {
@@ -517,32 +551,43 @@ export async function createEntity(req, res, next) {
 
   let created;
 
-  if (config.name === 'ConditionNote') {
-    if (!data.run_id && data.lift_id) {
+  try {
+    if (config.name === 'ConditionNote') {
+      if (!data.run_id && data.lift_id) {
+        return res.status(400).json({
+          statusCode: 400,
+          error: 'Bad Request',
+          message: 'This lift is not linked to a run yet. Link at least one run to this lift, then report conditions again.'
+        });
+      }
+
+      const conditionData = { ...data };
+      if (data.run_id) {
+        conditionData.run = { connect: { id: data.run_id } };
+      }
+      if (data.lift_id) {
+        conditionData.lift = { connect: { id: data.lift_id } };
+      }
+      if (data.created_by) {
+        conditionData.user = { connect: { email: data.created_by } };
+      }
+      delete conditionData.run_id;
+      delete conditionData.lift_id;
+      delete conditionData.created_by;
+
+      created = await prisma.conditionNote.create({ data: conditionData });
+    } else {
+      created = await config.model.create({ data });
+    }
+  } catch (error) {
+    if (error?.code === 'P2003') {
       return res.status(400).json({
         statusCode: 400,
         error: 'Bad Request',
-        message: 'This lift is not linked to a run yet. Link at least one run to this lift, then report conditions again.'
+        message: 'One or more referenced records do not exist. Refresh and try again.'
       });
     }
-
-    const conditionData = { ...data };
-    if (data.run_id) {
-      conditionData.run = { connect: { id: data.run_id } };
-    }
-    if (data.lift_id) {
-      conditionData.lift = { connect: { id: data.lift_id } };
-    }
-    if (data.created_by) {
-      conditionData.user = { connect: { email: data.created_by } };
-    }
-    delete conditionData.run_id;
-    delete conditionData.lift_id;
-    delete conditionData.created_by;
-
-    created = await prisma.conditionNote.create({ data: conditionData });
-  } else {
-    created = await config.model.create({ data });
+    throw error;
   }
 
   if (config.name === 'LiftWaitReport') {

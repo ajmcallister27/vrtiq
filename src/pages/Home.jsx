@@ -47,6 +47,11 @@ export default function Home() {
     queryFn: () => api.entities.LiftWaitReport.list('-created_date')
   });
 
+  const { data: liftStatuses = [] } = useQuery({
+    queryKey: ['lift-statuses-home'],
+    queryFn: () => api.entities.LiftStatusUpdate.list('-created_date')
+  });
+
   // Calculate run counts per resort
   const runCountByResort = runs.reduce((acc, run) => {
     acc[run.resort_id] = (acc[run.resort_id] || 0) + 1;
@@ -119,6 +124,24 @@ export default function Home() {
       return [];
     }
 
+    const latestReportByLiftKey = liftReports.reduce((acc, report) => {
+      const key = report.lift_id || `${report.resort_id}:${report.lift_name}`;
+      if (!key || acc[key]) {
+        return acc;
+      }
+      acc[key] = String(report.report_status || 'open').toLowerCase();
+      return acc;
+    }, {});
+
+    const latestStatusByLiftKey = liftStatuses.reduce((acc, update) => {
+      const key = update.lift_id || `${update.resort_id}:${update.lift_name}`;
+      if (!key || acc[key]) {
+        return acc;
+      }
+      acc[key] = String(update.status || 'open').toLowerCase();
+      return acc;
+    }, {});
+
     const reportsByLiftKey = liftReports.reduce((acc, report) => {
       const key = report.lift_id || `${report.resort_id}:${report.lift_name}`;
       if (!key) {
@@ -138,17 +161,22 @@ export default function Home() {
       .map((lift) => {
         const key = lift.id || `${lift.resort_id}:${lift.name}`;
         const recentReports = reportsByLiftKey[key] || [];
+        const latestStatus =
+          latestStatusByLiftKey[key] ||
+          latestReportByLiftKey[key] ||
+          String(lift.status || 'open').toLowerCase();
         const avgWait = recentReports.length
           ? recentReports.reduce((sum, report) => sum + report.wait_minutes, 0) / recentReports.length
           : null;
         return {
           lift,
           avgWait,
+          latestStatus,
           reportCount: recentReports.length,
           resortName: resorts.find((resort) => resort.id === lift.resort_id)?.name || 'Unknown Resort'
         };
       })
-      .filter((row) => row.avgWait !== null)
+      .filter((row) => row.avgWait !== null && row.latestStatus !== 'closed')
       .sort((a, b) => a.avgWait - b.avgWait)
       .slice(0, 5);
   })();
@@ -205,7 +233,7 @@ export default function Home() {
   return (
     <div className="pb-8">
       {/* Hero Section */}
-      <div className="bg-gradient-to-b from-slate-50 to-white px-4 pt-6 pb-8 lg:px-6">
+      <div className="bg-gradient-to-b from-slate-50 via-white to-white px-4 pt-6 pb-8 lg:px-6">
         <h1 className="text-2xl font-bold text-slate-900 mb-1">
           Find Real Difficulty
         </h1>
@@ -264,13 +292,13 @@ export default function Home() {
       </div>
 
       {/* Content */}
-      <div className="px-4 space-y-8 lg:px-6">
+      <div className="px-4 py-6 space-y-10 lg:px-6">
         {/* Nearby / Favorite Resorts */}
         {!searchQuery && (
           <>
             {/* Nearby */}
             {userLocation && (
-              <section>
+              <section className="space-y-4">
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="font-semibold text-slate-900">Nearby Resorts</h2>
                   <Link to={createPageUrl('Resorts')} className="text-sm text-sky-500 font-medium">See all</Link>
@@ -290,7 +318,7 @@ export default function Home() {
             )}
 
             {/* Favorites */}
-            <section>
+            <section className="space-y-4">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <Star className="w-4 h-4 text-amber-400" />
@@ -325,7 +353,7 @@ export default function Home() {
             )}
 
             {favoriteResorts.length > 0 && (
-              <section>
+              <section className="space-y-4">
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="font-semibold text-slate-900">Fastest Lifts in Your Resorts</h2>
                   <Link to={createPageUrl('LiftBoard')} className="text-sm text-sky-500 font-medium">See all lifts</Link>
@@ -336,13 +364,13 @@ export default function Home() {
                 ) : (
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                     {fastestLiftRows.map(({ lift, avgWait, reportCount, resortName }) => (
-                      <Link key={lift.id} to={createPageUrl(`Lift?id=${lift.id}`)} className="block p-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50">
-                        <div className="flex items-center justify-between gap-2">
-                          <div>
-                            <p className="text-sm font-semibold text-slate-900">{lift.name}</p>
-                            <p className="text-xs text-slate-500">{resortName} · based on last {reportCount} report{reportCount === 1 ? '' : 's'}</p>
+                      <Link key={lift.id} to={createPageUrl(`Lift?id=${lift.id}`)} className="block p-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-slate-900 truncate">{lift.name}</p>
+                            <p className="text-xs text-slate-500 mt-1">{resortName} · based on last {reportCount} report{reportCount === 1 ? '' : 's'}</p>
                           </div>
-                          <span className="text-xs px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold">
+                          <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold shrink-0">
                             {Math.round(avgWait)} min
                           </span>
                         </div>
@@ -357,7 +385,7 @@ export default function Home() {
 
         {/* Search results */}
         {searchQuery && (
-          <section>
+          <section className="space-y-4">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold text-slate-900">Search Results</h2>
               <Link to={createPageUrl('Resorts')} className="text-sm text-sky-500 font-medium">See all</Link>
@@ -378,7 +406,7 @@ export default function Home() {
 
         {/* Top Rated Runs */}
         {recentlyRatedRuns.length > 0 && (
-          <section>
+          <section className="space-y-4">
             <div className="flex items-center gap-2 mb-3">
               <TrendingUp className="w-4 h-4 text-sky-500" />
               <h2 className="font-semibold text-slate-900">Top Rated Runs</h2>

@@ -76,3 +76,7 @@ npm run build
 ## Known issue
 
 - error creating runs
+- login getting logged out
+- "fastest lifts" are closed, bad styling
+- bad styling on resort list page
+- add run is intrusive, needs to be more subtle

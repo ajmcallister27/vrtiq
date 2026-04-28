@@ -53,10 +53,10 @@ export default function Resorts() {
     });
 
   return (
-    <div className="pb-8">
+    <div className="pb-10">
       {/* Header */}
-      <div className="px-4 pt-6 pb-4 lg:px-6">
-        <div className="flex items-center justify-between mb-4">
+      <div className="px-4 pt-6 pb-5 lg:px-6">
+        <div className="flex items-center justify-between mb-5">
           <h1 className="text-xl font-bold text-slate-900">All Resorts</h1>
           <Link to={createPageUrl('AddData')}>
             <Button size="sm" className="bg-slate-900 hover:bg-slate-800 rounded-lg">
@@ -67,7 +67,7 @@ export default function Resorts() {
         </div>
 
         {/* Search & Filter */}
-        <div className="flex gap-2">
+        <div className="flex gap-2.5">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <Input
@@ -119,8 +119,8 @@ export default function Resorts() {
             }
           />
         ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            <p className="text-xs text-slate-400 sm:col-span-2 xl:col-span-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <p className="text-xs text-slate-400 mb-1 sm:col-span-2 xl:col-span-3">
               {filteredResorts.length} resort{filteredResorts.length !== 1 ? 's' : ''}
             </p>
             {filteredResorts.map(resort => (

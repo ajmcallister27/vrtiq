@@ -6,9 +6,7 @@ export function signToken(payload) {
     throw new Error('JWT_SECRET must be configured before issuing tokens');
   }
 
-  return jwt.sign(payload, appConfig.jwtSecret, {
-    expiresIn: appConfig.jwtExpiresIn,
-  });
+  return jwt.sign(payload, appConfig.jwtSecret);
 }
 
 export function verifyToken(token) {
