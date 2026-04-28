@@ -364,6 +364,7 @@ export async function createEntity(req, res, next) {
     normalizeNullableStringField(data, 'resort_id');
     normalizeNullableStringField(data, 'lift_id');
     normalizeNullableStringField(data, 'lift');
+    delete data.lift_name;
   }
 
   if (config.name === 'LiftWaitReport' || config.name === 'LiftStatusUpdate') {
@@ -410,7 +411,11 @@ export async function createEntity(req, res, next) {
   if ((config.name === 'Run' || config.name === 'LiftWaitReport' || config.name === 'LiftStatusUpdate') && data.lift_id && !data.lift_name) {
     const lift = await prisma.lift.findUnique({ where: { id: data.lift_id } });
     if (lift) {
-      data.lift_name = lift.name;
+      if (config.name === 'Run') {
+        data.lift = lift.name;
+      } else {
+        data.lift_name = lift.name;
+      }
       if (!data.resort_id) {
         data.resort_id = lift.resort_id;
       }
