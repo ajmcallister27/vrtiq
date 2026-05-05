@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import DifficultyBadge from '../components/DifficultyBadge';
+import { formatLiftName } from '@/lib/liftInsights';
 
 export default function AddData() {
   const [searchParams] = useSearchParams();
@@ -545,7 +546,7 @@ export default function AddData() {
                       <SelectItem value="__none__">No lift selected</SelectItem>
                       {lifts.map((lift) => (
                         <SelectItem key={lift.id} value={lift.id}>
-                          {lift.name}
+                          {formatLiftName(lift)}
                         </SelectItem>
                       ))}
                     </SelectContent>

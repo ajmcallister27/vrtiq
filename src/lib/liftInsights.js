@@ -67,6 +67,39 @@ function getConditionWeight(tags) {
   return normalizeTags(tags).reduce((score, tag) => score + (CONDITION_WEIGHTS[tag] || 0), 0);
 }
 
+function extractChairNumber(value) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  const match = text.match(/\bchair\s*(\d{1,2})\b/i) || text.match(/\((?:[^)]*?)\bchair\s*(\d{1,2})\b(?:[^)]*?)\)/i);
+  return match ? match[1] : null;
+}
+
+export function formatLiftName(lift) {
+  if (!lift) return '';
+  const rawName = String(lift.name || '').replace(/\s+/g, ' ').trim();
+  if (!rawName) return '';
+
+  const liftType = String(lift.lift_type || lift.type || '').toLowerCase();
+  const chairNumber = extractChairNumber(rawName);
+  const looksLikeChair = liftType === 'chairlift' || /\bchair\b/i.test(rawName);
+  if (!looksLikeChair) return rawName;
+
+  const cleaned = rawName
+    .replace(/\(\s*chair\s*\d{1,2}\s*\)/i, '')
+    .replace(/\bchair\s*\d{1,2}\b/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (chairNumber && cleaned) {
+    return `Chair ${chairNumber} (${cleaned})`;
+  }
+
+  if (chairNumber) {
+    return `Chair ${chairNumber}`;
+  }
+
+  return rawName;
+}
+
 function chooseRecentConditionTags(conditionNotes, liftKey, beforeDate) {
   const pivot = toDate(beforeDate);
   if (!pivot) return [];

@@ -7,7 +7,7 @@ import { api } from '@/api/apiClient';
 import { useAuth } from '@/lib/AuthContext';
 import { createPageUrl } from '../utils';
 import EmptyState from '../components/EmptyState';
-import { estimateLiftWaitMinutes } from '@/lib/liftInsights';
+import { estimateLiftWaitMinutes, formatLiftName } from '@/lib/liftInsights';
 import { getResortTimeZone } from '@/lib/resortTimeZone';
 import { useRatingMode } from '@/lib/RatingModeContext';
 import { getFavoriteResortIdSet } from '@/lib/userResorts';
@@ -292,7 +292,7 @@ export default function LiftBoard() {
               <Link key={lift.id} to={createPageUrl(`Lift?id=${lift.id}`)} className="block p-4 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 transition-colors">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h3 className="font-semibold text-slate-900">{lift.name}</h3>
+                    <h3 className="font-semibold text-slate-900">{formatLiftName(lift)}</h3>
                     <div className="text-xs text-slate-500 mt-1 flex items-center gap-3">
                       <span className="inline-flex items-center gap-1">
                         <Navigation className="w-3 h-3" />

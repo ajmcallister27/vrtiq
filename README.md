@@ -95,5 +95,4 @@ Notes:
 - add resort icons
 
 ## Known issue
-
-- error creating runs
+- OCR is not working well on some trail maps, leading to missing run matches. We are exploring improvements to the OCR process and fallback strategies for better run data extraction.

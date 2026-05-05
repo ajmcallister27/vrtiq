@@ -9,7 +9,7 @@ import EmptyState from '../components/EmptyState';
 import CrowdRating from '../components/CrowdRating';
 import { useRatingMode } from '@/lib/RatingModeContext';
 import TagBadge, { availableTags } from '@/components/TagBadge';
-import { estimateLiftWaitMinutes, normalizeTags } from '@/lib/liftInsights';
+import { estimateLiftWaitMinutes, normalizeTags, formatLiftName } from '@/lib/liftInsights';
 import { getResortTimeZone } from '@/lib/resortTimeZone';
 
 const waitPresets = [0, 5, 10, 15, 20, 30];
@@ -336,7 +336,7 @@ export default function Lift() {
       </Link>
 
       <div className="mt-4">
-        <h1 className="text-2xl font-bold text-slate-900">{lift.name}</h1>
+        <h1 className="text-2xl font-bold text-slate-900">{formatLiftName(lift)}</h1>
         <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3">
           <p className="text-xs uppercase tracking-wide text-sky-700 font-semibold">Current Wait Time</p>
           <p className="text-3xl font-bold text-slate-900 mt-1">

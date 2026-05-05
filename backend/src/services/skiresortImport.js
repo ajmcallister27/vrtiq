@@ -8,6 +8,8 @@ const MAX_MAP_ASSETS = 12;
 const MAX_CRAWL_PAGES = 10;
 const MAX_DISCOVERED_LINKS = 40;
 const MAX_OFFICIAL_MAP_PAGES = 6;
+const MAX_LIFT_DETAIL_PAGES = 35;
+const MAX_RUN_DETAIL_PAGES = 60;
 
 const RUN_INVALID_KEYWORDS = [
   'lift',
@@ -61,6 +63,79 @@ function normalizeKey(value) {
 
 function normalizeName(value) {
   return normalizeKey(value).replace(/\b(lift|chair|gondola|tram)\b/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function extractChairNumber(value) {
+  const text = normalizeWhitespace(value);
+  const match = text.match(/\bchair\s*(\d{1,2})\b/i) || text.match(/\((?:[^)]*?)\bchair\s*(\d{1,2})\b(?:[^)]*?)\)/i);
+  return match ? match[1] : null;
+}
+
+function canonicalizeLiftName(rawName, liftType) {
+  const value = normalizeWhitespace(rawName);
+  if (!value) return value;
+
+  const chairNumber = extractChairNumber(value);
+  const looksLikeChair = liftType === 'chairlift' || /\bchair\b/i.test(value);
+  if (!looksLikeChair) return value;
+
+  const cleaned = normalizeWhitespace(
+    value
+      .replace(/\(\s*chair\s*\d{1,2}\s*\)/i, '')
+      .replace(/\bchair\s*\d{1,2}\b/i, '')
+  );
+
+  if (chairNumber && cleaned) {
+    return `Chair ${chairNumber} (${cleaned})`;
+  }
+
+  if (chairNumber) {
+    return `Chair ${chairNumber}`;
+  }
+
+  return value;
+}
+
+function liftMatchKeys(rawName) {
+  const value = normalizeWhitespace(rawName);
+  if (!value) return [];
+
+  const chairNumber = extractChairNumber(value);
+  const cleaned = normalizeWhitespace(
+    value
+      .replace(/\(\s*chair\s*\d{1,2}\s*\)/i, '')
+      .replace(/\bchair\s*\d{1,2}\b/i, '')
+  );
+
+  const keys = new Set([
+    normalizeName(value),
+    normalizeKey(value),
+    normalizeName(cleaned),
+    normalizeKey(cleaned)
+  ]);
+
+  if (chairNumber) {
+    keys.add(`chair ${chairNumber}`);
+    keys.add(chairNumber);
+    if (cleaned) {
+      keys.add(normalizeKey(`chair ${chairNumber} ${cleaned}`));
+      keys.add(normalizeKey(`${cleaned} chair ${chairNumber}`));
+    }
+  }
+
+  return Array.from(keys).filter(Boolean);
+}
+
+function getLiftMatchIndex(lifts = []) {
+  const index = new Map();
+  lifts.forEach((lift) => {
+    liftMatchKeys(lift.name).forEach((key) => {
+      if (!index.has(key)) {
+        index.set(key, lift);
+      }
+    });
+  });
+  return index;
 }
 
 function getResortPathPrefix(urlString) {
@@ -202,6 +277,78 @@ function parseFloatLoose(value) {
   return Number.parseFloat(match[0]);
 }
 
+function convertLengthToFeet(value, unitHint) {
+  if (value === undefined || value === null) return undefined;
+  const unit = normalizeKey(unitHint || '');
+  if (unit.startsWith('km') || unit.includes('kilometer')) return Math.round(value * 3280.84);
+  if (unit === 'm' || unit.startsWith('meter')) return Math.round(value * 3.28084);
+  if (unit.startsWith('mi') || unit.includes('mile')) return Math.round(value * 5280);
+  if (unit.startsWith('ft') || unit.includes('feet') || unit.includes('foot')) return Math.round(value);
+  return Math.round(value);
+}
+
+function tryParseJson(value) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function flattenJsonLdNodes(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.flatMap((item) => flattenJsonLdNodes(item));
+  if (typeof value !== 'object') return [];
+
+  const nodes = [value];
+  if (Array.isArray(value['@graph'])) {
+    nodes.push(...value['@graph']);
+  }
+  return nodes.flatMap((item) => (Array.isArray(item) ? flattenJsonLdNodes(item) : [item]));
+}
+
+function normalizeCountryName(value) {
+  const text = normalizeWhitespace(value);
+  if (!text) return undefined;
+  const parts = text.split(',').map((part) => normalizeWhitespace(part)).filter(Boolean);
+  return parts.length > 0 ? parts[parts.length - 1] : text;
+}
+
+function readStructuredResortData($) {
+  const nodes = [];
+  $('script[type="application/ld+json"]').each((_, el) => {
+    const raw = $(el).contents().text();
+    if (!raw) return;
+    const parsed = tryParseJson(raw);
+    if (!parsed) return;
+    nodes.push(...flattenJsonLdNodes(parsed));
+  });
+
+  const typedNodes = nodes.filter((node) => {
+    const typeRaw = node?.['@type'];
+    const types = Array.isArray(typeRaw) ? typeRaw : [typeRaw];
+    const joined = normalizeKey(types.filter(Boolean).join(' '));
+    return /skiresort|skiresort|place|touristdestination|sportsactivitylocation|organization/.test(joined);
+  });
+
+  const geoNode = typedNodes.find((node) => node?.geo?.latitude && node?.geo?.longitude) || typedNodes[0] || null;
+  const address = geoNode?.address || {};
+
+  const lat = Number.parseFloat(geoNode?.geo?.latitude);
+  const lon = Number.parseFloat(geoNode?.geo?.longitude);
+  const city = normalizeWhitespace(address?.addressLocality || address?.addressRegion || '');
+  const country = normalizeCountryName(address?.addressCountry || '');
+
+  return {
+    name: cleanResortDisplayName(geoNode?.name || ''),
+    location: city && country ? `${city}, ${country}` : city || undefined,
+    country,
+    latitude: Number.isFinite(lat) ? lat : undefined,
+    longitude: Number.isFinite(lon) ? lon : undefined,
+    website: normalizeWhitespace(geoNode?.url || geoNode?.sameAs || '') || undefined
+  };
+}
+
 function normalizeDifficulty(raw) {
   const value = normalizeKey(raw);
   if (!value) return undefined;
@@ -255,10 +402,10 @@ function tokenizeName(value) {
 
 function fuzzyMatchLiftByName(liftHint, liftRecords = []) {
   if (!liftHint || liftRecords.length === 0) return null;
-  const hintNormalized = normalizeName(liftHint);
-  if (!hintNormalized) return null;
-
-  const exact = liftRecords.find((lift) => normalizeName(lift.name) === hintNormalized);
+  const liftMatchIndex = getLiftMatchIndex(liftRecords);
+  const exact = liftMatchKeys(liftHint)
+    .map((key) => liftMatchIndex.get(key))
+    .find(Boolean);
   if (exact) return exact;
 
   const hintTokens = tokenizeName(liftHint);
@@ -364,7 +511,67 @@ async function geocodeResortCoordinates({ name, location, country }) {
     }
   }
 
+  for (const query of queries) {
+    if (!query) continue;
+
+    try {
+      const url = new URL('https://photon.komoot.io/api/');
+      url.searchParams.set('q', query);
+      url.searchParams.set('limit', '5');
+
+      const response = await fetch(url.toString(), {
+        headers: {
+          'user-agent': 'vrtIQ importer/1.0 (+https://vrtiq.app)'
+        }
+      });
+
+      if (!response.ok) continue;
+      const payload = await response.json();
+      const features = Array.isArray(payload?.features) ? payload.features : [];
+      const best = features.find((item) => /ski|resort|mountain/i.test(normalizeKey(item?.properties?.name || ''))) || features[0];
+      const coords = Array.isArray(best?.geometry?.coordinates) ? best.geometry.coordinates : [];
+      const lon = Number.parseFloat(coords[0]);
+      const lat = Number.parseFloat(coords[1]);
+      if (Number.isFinite(lat) && Number.isFinite(lon)) {
+        return { latitude: lat, longitude: lon };
+      }
+    } catch {
+      // Continue to next geocoder fallback.
+    }
+  }
+
   return {};
+}
+
+async function reverseGeocodeLocation({ latitude, longitude }) {
+  if (!Number.isFinite(Number(latitude)) || !Number.isFinite(Number(longitude))) {
+    return {};
+  }
+
+  try {
+    const url = new URL('https://nominatim.openstreetmap.org/reverse');
+    url.searchParams.set('lat', String(latitude));
+    url.searchParams.set('lon', String(longitude));
+    url.searchParams.set('format', 'jsonv2');
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        'user-agent': 'vrtIQ importer/1.0 (+https://vrtiq.app)'
+      }
+    });
+
+    if (!response.ok) return {};
+    const result = await response.json();
+    const address = result?.address || {};
+    const locality = normalizeWhitespace(address.city || address.town || address.village || address.county || '');
+    const country = normalizeWhitespace(address.country || '');
+    return {
+      location: locality && country ? `${locality}, ${country}` : locality || undefined,
+      country: country || undefined
+    };
+  } catch {
+    return {};
+  }
 }
 
 async function fetchRunsFromOpenStreetMap({ latitude, longitude }) {
@@ -387,7 +594,7 @@ async function fetchRunsFromOpenStreetMap({ latitude, longitude }) {
       way(around:${radiusMeters},${lat},${lon})["aerialway"]["name"];
       relation(around:${radiusMeters},${lat},${lon})["aerialway"]["name"];
     );
-    out tags center;
+    out tags center geom;
   `;
 
   try {
@@ -415,11 +622,26 @@ async function fetchRunsFromOpenStreetMap({ latitude, longitude }) {
       }))
       .filter((lift) => lift.name && Number.isFinite(lift.lat) && Number.isFinite(lift.lon));
 
+    const lengthFromGeometryFeet = (geometry) => {
+      if (!Array.isArray(geometry) || geometry.length < 2) return undefined;
+      let total = 0;
+      for (let i = 1; i < geometry.length; i += 1) {
+        const a = geometry[i - 1];
+        const b = geometry[i];
+        if (!Number.isFinite(a?.lat) || !Number.isFinite(a?.lon) || !Number.isFinite(b?.lat) || !Number.isFinite(b?.lon)) {
+          continue;
+        }
+        total += distanceMeters(a.lat, a.lon, b.lat, b.lon);
+      }
+      return total > 10 ? Math.round(total * 3.28084) : undefined;
+    };
+
     const mapped = elements
       .filter((el) => normalizeKey(el?.tags?.['piste:type']) === 'downhill')
       .map((el) => {
         const runLat = Number.parseFloat(el?.lat ?? el?.center?.lat);
         const runLon = Number.parseFloat(el?.lon ?? el?.center?.lon);
+        const tags = el?.tags || {};
 
         let nearestLift = null;
         let nearestLiftDistance = Infinity;
@@ -434,11 +656,23 @@ async function fetchRunsFromOpenStreetMap({ latitude, longitude }) {
         }
 
         return {
-        name: normalizeWhitespace(el?.tags?.name || ''),
-        official_difficulty: normalizeDifficulty(el?.tags?.['piste:difficulty'] || ''),
-        groomed: String(el?.tags?.grooming || '').toLowerCase().includes('groom'),
-        lift: nearestLiftDistance <= 2200 ? nearestLift?.name : undefined
-      };
+          name: normalizeWhitespace(tags?.name || ''),
+          official_difficulty: normalizeDifficulty(
+            tags?.['piste:difficulty']
+            || tags?.difficulty
+            || tags?.mtb?.scale
+            || tags?.sac_scale
+            || ''
+          ),
+          groomed: String(tags?.grooming || '').toLowerCase().includes('groom'),
+          lift: nearestLiftDistance <= 2200 ? nearestLift?.name : undefined,
+          served_lifts: [
+            normalizeWhitespace(tags?.['piste:lift'] || ''),
+            normalizeWhitespace(tags?.['lift'] || ''),
+            normalizeWhitespace(tags?.['operator'] || '')
+          ].filter(Boolean),
+          length_ft: convertLengthToFeet(parseFloatLoose(tags?.length), tags?.['length:unit']) || lengthFromGeometryFeet(el?.geometry)
+        };
       })
       .filter((run) => isActualRunName(run.name));
 
@@ -452,7 +686,9 @@ async function fetchRunsFromOpenStreetMap({ latitude, longitude }) {
         name: run.name,
         official_difficulty: run.official_difficulty || 'blue',
         groomed: run.groomed,
-        lift: run.lift
+        lift: run.lift,
+        served_lifts: run.served_lifts,
+        length_ft: run.length_ft
       });
     });
 
@@ -574,6 +810,12 @@ function detectLiftType(raw) {
   return matched ? matched.value : undefined;
 }
 
+function isPlannedLiftText(raw) {
+  const value = normalizeKey(raw);
+  if (!value) return false;
+  return /\b(planned|project|under construction|opening\s*\d{4}|future lift|proposed)\b/.test(value);
+}
+
 function pickHeaderIndex(headers, aliases) {
   for (let index = 0; index < headers.length; index += 1) {
     const key = normalizeKey(headers[index]);
@@ -615,6 +857,7 @@ function parseTable($, $table) {
 }
 
 function extractResortData($, sourceUrl) {
+  const structured = readStructuredResortData($);
   const title = normalizeWhitespace($('h1').first().text()) || normalizeWhitespace($('title').first().text());
 
   const breadcrumb = [];
@@ -644,15 +887,15 @@ function extractResortData($, sourceUrl) {
     null;
 
   return {
-    name: title || 'Unknown Resort',
-    location: location || 'Unknown',
-    country: breadcrumb[breadcrumb.length - 1] || undefined,
-    latitude: latMatch ? Number.parseFloat(latMatch[1]) : undefined,
-    longitude: lngMatch ? Number.parseFloat(lngMatch[1]) : undefined,
+    name: structured.name || title || 'Unknown Resort',
+    location: structured.location || location || 'Unknown',
+    country: structured.country || breadcrumb[breadcrumb.length - 1] || undefined,
+    latitude: structured.latitude ?? (latMatch ? Number.parseFloat(latMatch[1]) : undefined),
+    longitude: structured.longitude ?? (lngMatch ? Number.parseFloat(lngMatch[1]) : undefined),
     vertical_drop: verticalDrop,
     base_elevation: baseElevation,
     peak_elevation: peakElevation,
-    website: absoluteUrl(sourceUrl, websiteHref) || sourceUrl,
+    website: structured.website || absoluteUrl(sourceUrl, websiteHref) || sourceUrl,
     map_image_url: absoluteUrl(sourceUrl, mapLink)
   };
 }
@@ -817,6 +1060,124 @@ function mergeEntityLists(...lists) {
   return Array.from(merged.values());
 }
 
+function collectDetailLinksFromPages(pages, pathPattern, limit) {
+  const links = new Set();
+
+  pages.forEach((page) => {
+    page.$('a[href]').each((_, el) => {
+      const href = page.$(el).attr('href');
+      const abs = absoluteUrl(page.url, href);
+      if (!abs || !SKIRESORT_HOST_RE.test(new URL(abs).hostname)) return;
+      if (!pathPattern.test(new URL(abs).pathname)) return;
+      links.add(abs);
+    });
+  });
+
+  return Array.from(links).slice(0, limit);
+}
+
+function parseLiftDetailPage($) {
+  const heading = normalizeWhitespace($('h1').first().text()) || normalizeWhitespace($('title').first().text());
+  const text = normalizeWhitespace($('body').text());
+  const liftType = detectLiftType(text) || detectLiftType(heading);
+  const verticalRaw = text.match(/(?:vertical\s*rise|height\s*difference|difference\s*in\s*altitude|elevation\s*gain)[^\d]{0,40}(\d[\d,.]*)\s*(m|meters|ft|feet)?/i);
+  const durationRaw = text.match(/(?:ride\s*time|duration|travel\s*time|journey\s*time)[^\d]{0,24}(\d[\d,.]*)\s*(min|minutes)?/i);
+  const seatRaw = text.match(/(?:\b(\d+)\s*(?:person|persons|seater|seats)\b|\b(\d+)\s*seater\b)/i);
+  const statsText = normalizeWhitespace($('dl, .facts, .data, table').text());
+  const fallbackVertical = statsText.match(/(?:vertical\s*rise|height\s*difference|difference\s*in\s*altitude)[^\d]{0,30}(\d[\d,.]*)\s*(m|meters|ft|feet)?/i);
+  const fallbackDuration = statsText.match(/(?:ride\s*time|duration|travel\s*time)[^\d]{0,20}(\d[\d,.]*)\s*(min|minutes)?/i);
+  const fallbackSeat = statsText.match(/(\d+)\s*(?:person|persons|seater|seats)/i);
+
+  return {
+    name: canonicalizeLiftName(heading.replace(/^ski\s*lift\s*/i, ''), liftType),
+    lift_type: liftType,
+    seat_count: parseIntLoose(seatRaw?.[1] || seatRaw?.[2] || fallbackSeat?.[1]),
+    vertical_rise_ft: convertToFeet(parseFloatLoose(verticalRaw?.[1] || fallbackVertical?.[1]), verticalRaw?.[2] || fallbackVertical?.[2]),
+    ride_minutes_avg: parseFloatLoose(durationRaw?.[1] || fallbackDuration?.[1]),
+    is_planned: isPlannedLiftText(`${heading} ${text} ${statsText}`)
+  };
+}
+
+function parseRunDetailPage($) {
+  const heading = normalizeWhitespace($('h1').first().text()) || normalizeWhitespace($('title').first().text());
+  const text = normalizeWhitespace($('body').text());
+
+  const difficultyRaw = text.match(/(?:difficulty|level|grade)[^A-Za-z]{0,20}([A-Za-z\s\-]{3,30})/i)?.[1];
+  const liftFromSentence = normalizeWhitespace(
+    text.match(/served\s+by\s+([^\.\,\;]{2,80})/i)?.[1]
+    || text.match(/access(?:ed)?\s+via\s+([^\.\,\;]{2,80})/i)?.[1]
+    || ''
+  );
+
+  const liftAnchor = normalizeWhitespace(
+    $('a[href*="/ski-lifts/l"]').first().text()
+  );
+
+  const lengthRaw = text.match(/(?:length|distance)[^\d]{0,20}(\d[\d,.]*)\s*(km|kilometers|m|meters|mi|miles|ft|feet)/i);
+  const verticalRaw = text.match(/(?:vertical\s*drop|height\s*difference)[^\d]{0,30}(\d[\d,.]*)\s*(m|meters|ft|feet)?/i);
+  const avgPitchRaw = text.match(/(?:average\s*pitch|avg\.?\s*pitch)[^\d]{0,20}(\d[\d,.]*)\s*(?:°|deg|degrees)?/i);
+  const maxPitchRaw = text.match(/(?:max(?:imum)?\s*pitch)[^\d]{0,20}(\d[\d,.]*)\s*(?:°|deg|degrees)?/i);
+
+  return {
+    name: normalizeWhitespace(heading.replace(/^ski\s*(run|slope|trail)\s*/i, '')),
+    official_difficulty: normalizeDifficulty(difficultyRaw || ''),
+    lift: liftAnchor || liftFromSentence || undefined,
+    length_ft: convertLengthToFeet(parseFloatLoose(lengthRaw?.[1]), lengthRaw?.[2]),
+    vertical_drop: convertToFeet(parseFloatLoose(verticalRaw?.[1]), verticalRaw?.[2]),
+    average_pitch: parseFloatLoose(avgPitchRaw?.[1]),
+    max_pitch: parseFloatLoose(maxPitchRaw?.[1])
+  };
+}
+
+async function enrichLiftsFromDetailPages(pages, lifts) {
+  const detailLinks = collectDetailLinksFromPages(pages, /\/ski-lifts\/l/i, MAX_LIFT_DETAIL_PAGES);
+  if (detailLinks.length === 0 || lifts.length === 0) return lifts;
+
+  const liftByName = getLiftMatchIndex(lifts);
+  const updates = [];
+
+  for (const url of detailLinks) {
+    try {
+      const html = await fetchText(url);
+      const $ = cheerio.load(html);
+      const parsed = parseLiftDetailPage($);
+      if (parsed.is_planned) continue;
+
+      const match = liftMatchKeys(parsed.name).map((key) => liftByName.get(key)).find(Boolean)
+        || fuzzyMatchLiftByName(parsed.name, lifts);
+      if (!match) continue;
+
+      const matchedName = match.name || parsed.name;
+      updates.push(parsed);
+      updates[updates.length - 1].name = matchedName;
+    } catch {
+      // Ignore inaccessible detail page.
+    }
+  }
+
+  return mergeEntityLists(lifts, updates).filter((lift) => !isPlannedLiftText(`${lift.name} ${lift.description || ''}`));
+}
+
+async function enrichRunsFromDetailPages(pages, runs) {
+  const detailLinks = collectDetailLinksFromPages(pages, /\/(ski-runs-slopes|slope-offering)\/r/i, MAX_RUN_DETAIL_PAGES);
+  if (detailLinks.length === 0) return runs;
+
+  const updates = [];
+  for (const url of detailLinks) {
+    try {
+      const html = await fetchText(url);
+      const $ = cheerio.load(html);
+      const parsed = parseRunDetailPage($);
+      if (!isActualRunName(parsed.name)) continue;
+      updates.push(parsed);
+    } catch {
+      // Ignore inaccessible detail page.
+    }
+  }
+
+  return mergeEntityLists(runs, updates).filter((run) => isActualRunName(run.name));
+}
+
 function extractLiftsAndRunsFromPages(pages) {
   const liftsCollection = [];
   const runsCollection = [];
@@ -840,8 +1201,10 @@ function extractLiftsAndRunsFromPages(pages) {
       if (!cleanName) return;
 
       const meta = normalizeWhitespace(page.$(el).closest('h4').parent().text());
+      if (isPlannedLiftText(`${heading} ${meta}`)) return;
+
       liftsCollection.push({
-        name: cleanName,
+        name: canonicalizeLiftName(cleanName, detectLiftType(meta) || detectLiftType(cleanName) || 'other'),
         lift_type: detectLiftType(meta) || detectLiftType(cleanName) || 'other',
         seat_count: parseIntLoose(meta.match(/(\d+)\s*pers/i)?.[1]),
         vertical_rise_ft: convertToFeet(parseIntLoose(meta.match(/vertical\s*[:]?\s*([\d,.]+)/i)?.[1]), /\bm\b/i.test(meta) ? 'm' : 'ft'),
@@ -850,7 +1213,9 @@ function extractLiftsAndRunsFromPages(pages) {
     });
   });
 
-  const lifts = mergeEntityLists(liftsCollection).filter((item) => item.name && item.name.length >= 2);
+  const lifts = mergeEntityLists(liftsCollection)
+    .filter((item) => item.name && item.name.length >= 2)
+    .filter((item) => !isPlannedLiftText(item.name));
   const runs = mergeEntityLists(runsCollection).filter((item) => item.name && item.name.length >= 2);
   return { lifts, runs };
 }
@@ -879,6 +1244,9 @@ function extractLiftsAndRuns($) {
       const durationIndex = pickHeaderIndex(headers, ['duration', 'ride', 'time']);
 
       body.forEach((row) => {
+        const rowText = normalizeWhitespace(row.join(' '));
+        if (isPlannedLiftText(rowText)) return;
+
         const name = normalizeWhitespace(row[nameIndex] || row[0]);
         if (!name) return;
 
@@ -886,12 +1254,13 @@ function extractLiftsAndRuns($) {
         const seatRaw = normalizeWhitespace(row[seatIndex] || '');
         const riseRaw = normalizeWhitespace(row[riseIndex] || '');
         const durationRaw = normalizeWhitespace(row[durationIndex] || '');
+        const riseUnit = /\bm\b|meter/i.test(riseRaw) ? 'm' : 'ft';
 
         lifts.push({
-          name,
+          name: canonicalizeLiftName(name, detectLiftType(typeRaw) || detectLiftType(name) || 'other'),
           lift_type: detectLiftType(typeRaw) || detectLiftType(name) || 'other',
           seat_count: parseIntLoose(seatRaw),
-          vertical_rise_ft: parseIntLoose(riseRaw),
+          vertical_rise_ft: convertToFeet(parseFloatLoose(riseRaw), riseUnit),
           ride_minutes_avg: parseFloatLoose(durationRaw)
         });
       });
@@ -1130,31 +1499,41 @@ async function upsertImportedData({ resort, lifts, runs, userEmail }) {
     let liftsCreated = 0;
     let liftsUpdated = 0;
 
-    const liftByNormalizedName = new Map();
-    const liftRecords = [];
+    const existingLiftRecords = await tx.lift.findMany({
+      where: { resort_id: resortRecord.id }
+    });
+    const liftByNormalizedName = getLiftMatchIndex(existingLiftRecords);
+    const liftRecords = [...existingLiftRecords];
 
     for (const lift of lifts) {
       if (!lift.name) continue;
 
-      const existingLift = await tx.lift.findUnique({
-        where: {
-          resort_id_name: {
+      const canonicalName = canonicalizeLiftName(lift.name, lift.lift_type || lift.type);
+      const candidateNames = liftMatchKeys(canonicalName);
+      const existingLift = candidateNames
+        .map((candidate) => liftByNormalizedName.get(candidate))
+        .find(Boolean) || await tx.lift.findFirst({
+          where: {
             resort_id: resortRecord.id,
-            name: lift.name
+            OR: candidateNames.map((candidate) => ({ name: candidate }))
           }
-        }
-      });
+        });
 
       const createdOrUpdated = await tx.lift.upsert({
         where: {
-          resort_id_name: {
-            resort_id: resortRecord.id,
-            name: lift.name
-          }
+          resort_id_name: existingLift
+            ? {
+                resort_id: resortRecord.id,
+                name: existingLift.name
+              }
+            : {
+                resort_id: resortRecord.id,
+                name: canonicalName
+              }
         },
         create: {
           resort_id: resortRecord.id,
-          name: lift.name,
+          name: canonicalName,
           created_by: userEmail,
           status: 'open',
           lift_type: lift.lift_type,
@@ -1178,7 +1557,11 @@ async function upsertImportedData({ resort, lifts, runs, userEmail }) {
         liftsCreated += 1;
       }
 
-      liftByNormalizedName.set(normalizeName(createdOrUpdated.name), createdOrUpdated);
+      liftMatchKeys(createdOrUpdated.name).forEach((key) => {
+        if (!liftByNormalizedName.has(key)) {
+          liftByNormalizedName.set(key, createdOrUpdated);
+        }
+      });
       liftRecords.push(createdOrUpdated);
     }
 
@@ -1189,14 +1572,16 @@ async function upsertImportedData({ resort, lifts, runs, userEmail }) {
       if (!run.name) continue;
 
       const runLiftHint = run.lift || run.served_lift || run.served_by_lift;
-      let liftRecord = runLiftHint ? liftByNormalizedName.get(normalizeName(runLiftHint)) : null;
+      let liftRecord = runLiftHint
+        ? (liftMatchKeys(runLiftHint).map((key) => liftByNormalizedName.get(key)).find(Boolean) || null)
+        : null;
       if (!liftRecord && runLiftHint) {
         liftRecord = fuzzyMatchLiftByName(runLiftHint, liftRecords);
       }
 
       if (!liftRecord && Array.isArray(run.served_lifts)) {
         for (const hint of run.served_lifts) {
-          liftRecord = liftByNormalizedName.get(normalizeName(hint)) || fuzzyMatchLiftByName(hint, liftRecords);
+          liftRecord = liftMatchKeys(hint).map((key) => liftByNormalizedName.get(key)).find(Boolean) || fuzzyMatchLiftByName(hint, liftRecords);
           if (liftRecord) break;
         }
       }
@@ -1212,7 +1597,7 @@ async function upsertImportedData({ resort, lifts, runs, userEmail }) {
         resort_id: resortRecord.id,
         name: run.name,
         official_difficulty: run.official_difficulty || 'blue',
-        lift: liftRecord?.name || runLiftHint || null,
+        lift: liftRecord?.name || null,
         lift_id: liftRecord?.id || null,
         length_ft: run.length_ft,
         vertical_drop: run.vertical_drop,
@@ -1270,13 +1655,22 @@ export async function importFromSkiresortInfo({ sourceUrl, userEmail }) {
   const resolvedWebsite = resort.website;
   const officialTrailMapUrl = await discoverOfficialTrailMapUrl(resolvedWebsite, resort.name);
 
+  const reverseLocation = await reverseGeocodeLocation({
+    latitude: resort.latitude || geocodedCoords.latitude,
+    longitude: resort.longitude || geocodedCoords.longitude
+  });
+
   const resolvedResort = {
     ...resort,
     latitude: resort.latitude || geocodedCoords.latitude,
     longitude: resort.longitude || geocodedCoords.longitude,
+    location: (!resort.location || resort.location === 'Unknown') ? (reverseLocation.location || resort.location) : resort.location,
+    country: resort.country || reverseLocation.country,
     map_image_url: officialTrailMapUrl || (!hasSkiresortHost(resort.map_image_url || '') ? resort.map_image_url : null)
   };
-  const { lifts, runs } = extractLiftsAndRunsFromPages(crawl.pages);
+  const extractedEntities = extractLiftsAndRunsFromPages(crawl.pages);
+  const lifts = await enrichLiftsFromDetailPages(crawl.pages, extractedEntities.lifts);
+  const runsFromPages = await enrichRunsFromDetailPages(crawl.pages, extractedEntities.runs);
 
   const mapUrls = crawl.pages
     .map((page) => {
@@ -1287,19 +1681,36 @@ export async function importFromSkiresortInfo({ sourceUrl, userEmail }) {
 
   const nonSkiresortMapFromCrawl = mapUrls.find((url) => !hasSkiresortHost(url));
   const mapUrl = resolvedResort.map_image_url || nonSkiresortMapFromCrawl || null;
-  const mapResult = await analyzeTrailMap(mapUrl, runs);
+  const mapResult = await analyzeTrailMap(mapUrl, runsFromPages);
+  const osmRuns = await fetchRunsFromOpenStreetMap({
+    latitude: resolvedResort.latitude,
+    longitude: resolvedResort.longitude
+  });
 
   const hintsByName = new Map(
     mapResult.runHints.map((hint) => [normalizeName(hint.name), hint])
   );
 
-  let mergedRuns = runs.map((run) => {
+  const osmByName = new Map(
+    osmRuns.map((run) => [normalizeName(run.name), run])
+  );
+
+  let mergedRuns = runsFromPages.map((run) => {
     const hint = hintsByName.get(normalizeName(run.name));
+    const osm = osmByName.get(normalizeName(run.name));
     return {
       ...run,
-      official_difficulty: run.official_difficulty || hint?.official_difficulty || 'blue'
+      official_difficulty: run.official_difficulty || hint?.official_difficulty || osm?.official_difficulty || 'blue',
+      lift: run.lift || osm?.lift,
+      served_lifts: run.served_lifts || osm?.served_lifts,
+      length_ft: run.length_ft || osm?.length_ft,
+      groomed: run.groomed ?? osm?.groomed
     };
   });
+
+  if (osmRuns.length > 0) {
+    mergedRuns = mergeEntityLists(mergedRuns, osmRuns);
+  }
 
   if (mergedRuns.length === 0 && mapResult.runHints.length > 0) {
     mergedRuns = mapResult.runHints
@@ -1308,16 +1719,6 @@ export async function importFromSkiresortInfo({ sourceUrl, userEmail }) {
         name: normalizeWhitespace(hint.name),
         official_difficulty: hint.official_difficulty || 'blue'
       }));
-  }
-
-  if (mergedRuns.length === 0) {
-    const osmRuns = await fetchRunsFromOpenStreetMap({
-      latitude: resolvedResort.latitude,
-      longitude: resolvedResort.longitude
-    });
-    if (osmRuns.length > 0) {
-      mergedRuns = osmRuns;
-    }
   }
 
   mergedRuns = mergedRuns
