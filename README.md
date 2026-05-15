@@ -67,16 +67,10 @@ npm run build
 
 ## Current priorities
 
+- push to app stores
 - filter by condition per day
 - add "last updated" timestamp to resorts
-- push to app stores
 - make it fast and responsive
 - add resort icons
 
-## Known issue
-
-- error creating runs
-- login getting logged out
-- "fastest lifts" are closed, bad styling
-- bad styling on resort list page
-- add run is intrusive, needs to be more subtle
+## Known issues
