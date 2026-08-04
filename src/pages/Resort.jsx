@@ -25,7 +25,11 @@ export default function Resort() {
   const [sortBy, setSortBy] = useState('official'); // official, crowd, name
   const [filterDifficulty, setFilterDifficulty] = useState('all');
   const [sortOrder, setSortOrder] = useState('asc');
+  const [showAllRuns, setShowAllRuns] = useState(false);
+  const [showAllLifts, setShowAllLifts] = useState(false);
   const { ratingMode } = useRatingMode();
+
+  const LIST_PREVIEW_COUNT = 8;
 
   const { data: resort, isLoading: resortLoading } = useQuery({
     queryKey: ['resort', resortId],
@@ -92,6 +96,7 @@ export default function Resort() {
       }
       return sortOrder === 'asc' ? comparison : -comparison;
     });
+  const visibleRuns = showAllRuns ? filteredRuns : filteredRuns.slice(0, LIST_PREVIEW_COUNT);
 
   // Count runs by difficulty
   const runCounts = runs.reduce((acc, run) => {
@@ -139,6 +144,7 @@ export default function Resort() {
       verificationLabel: status ? (status.verified ? 'confirmed' : 'awaiting one more report') : 'no confirmations yet'
     };
   });
+  const visibleLifts = showAllLifts ? liftBoardRows : liftBoardRows.slice(0, LIST_PREVIEW_COUNT);
 
   if (resortLoading) {
     return (
@@ -290,16 +296,25 @@ export default function Resort() {
             }
           />
         ) : (
-          <div className="space-y-2">
-            {filteredRuns.map(run => (
-              <RunCard
-                key={run.id}
-                run={run}
-                avgRating={avgRatingWithOfficialByRun[run.id]}
-                ratingCount={(ratingsByRun[run.id]?.length || 0) + 1}
-              />
-            ))}
-          </div>
+          <>
+            <div className="space-y-2">
+              {visibleRuns.map(run => (
+                <RunCard
+                  key={run.id}
+                  run={run}
+                  avgRating={avgRatingWithOfficialByRun[run.id]}
+                  ratingCount={(ratingsByRun[run.id]?.length || 0) + 1}
+                />
+              ))}
+            </div>
+            {filteredRuns.length > LIST_PREVIEW_COUNT && (
+              <div className="mt-3">
+                <Button variant="outline" className="w-full rounded-xl" onClick={() => setShowAllRuns((value) => !value)}>
+                  {showAllRuns ? 'Show less' : `See more runs (${filteredRuns.length - LIST_PREVIEW_COUNT} more)`}
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -313,7 +328,7 @@ export default function Resort() {
           </div>
 
           <div className="space-y-2">
-            {liftBoardRows.map((lift) => (
+            {visibleLifts.map((lift) => (
               <Link key={lift.id} to={createPageUrl(`Lift?id=${lift.id}`)} className="block p-3 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 transition-colors">
                 <div className="flex items-center justify-between gap-3">
                   <div>
@@ -340,6 +355,13 @@ export default function Resort() {
               </Link>
             ))}
           </div>
+          {liftBoardRows.length > LIST_PREVIEW_COUNT && (
+            <div className="mt-3">
+              <Button variant="outline" className="w-full rounded-xl" onClick={() => setShowAllLifts((value) => !value)}>
+                {showAllLifts ? 'Show less' : `See more lifts (${liftBoardRows.length - LIST_PREVIEW_COUNT} more)`}
+              </Button>
+            </div>
+          )}
         </div>
       )}
 

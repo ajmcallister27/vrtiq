@@ -354,18 +354,17 @@ export default function Admin() {
 
   const loadRelationOptions = async () => {
     try {
-      const [resorts, runs, lifts, users] = await Promise.all([
+      const [resorts, runs, lifts] = await Promise.all([
         api.entities.Resort.list('name'),
         api.entities.Run.list('name', 2000),
-        api.entities.Lift.list('name', 2000),
-        api.entities.User.list('email', 2000)
+        api.entities.Lift.list('name', 2000)
       ]);
 
       setRelationOptions({
         Resort: Array.isArray(resorts) ? resorts : [],
         Run: Array.isArray(runs) ? runs : [],
         Lift: Array.isArray(lifts) ? lifts : [],
-        User: Array.isArray(users) ? users : []
+        User: []
       });
     } catch (err) {
       showAdminError(err.message || 'Failed to load relation options');

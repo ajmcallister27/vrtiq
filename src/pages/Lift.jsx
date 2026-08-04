@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createPageUrl } from '../utils';
 import { api } from '@/api/apiClient';
+import { useAuth } from '@/lib/AuthContext';
 import { Loader2, Mountain, Clock3, ArrowLeft, MessageSquare } from 'lucide-react';
 import { formatDistanceToNowStrict } from 'date-fns';
 import EmptyState from '../components/EmptyState';
@@ -29,6 +30,7 @@ export default function Lift() {
   const resortId = searchParams.get('resort');
   const liftName = searchParams.get('name');
   const { ratingMode } = useRatingMode();
+  const { user: currentUser, isLoadingAuth } = useAuth();
 
   const [undoReport, setUndoReport] = useState(null);
   const [reportError, setReportError] = useState('');
@@ -59,11 +61,6 @@ export default function Lift() {
     queryKey: ['resort', lift?.resort_id],
     queryFn: () => api.entities.Resort.get(lift.resort_id),
     enabled: !!lift?.resort_id
-  });
-
-  const { data: currentUser } = useQuery({
-    queryKey: ['me'],
-    queryFn: () => api.auth.me()
   });
 
   const { data: runs = [], isLoading: loadingRuns } = useQuery({
@@ -377,7 +374,9 @@ export default function Lift() {
       <div className="mt-5 space-y-4">
         <div className="p-4 border border-slate-200 rounded-xl bg-white">
           <h2 className="font-semibold text-slate-900 mb-3">Report Lift Wait</h2>
-          {!currentUser ? (
+          {isLoadingAuth ? (
+            <div className="text-sm text-slate-500">Checking your session...</div>
+          ) : !currentUser ? (
             <div className="text-sm text-slate-500">
               <Link to={createPageUrl('Login')} className="text-sky-700 hover:underline">Log in</Link> to submit lift wait reports.
             </div>
